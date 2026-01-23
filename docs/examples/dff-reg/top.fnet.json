@@ -1,0 +1,16 @@
+{
+  "top": "top",
+  "modules": {
+    "top": {
+      "ports": {
+        "clk": {"dir": "in"},
+        "d": {"dir": "in"},
+        "q": {"dir": "out"}
+      },
+      "cells": {
+        "u1": {"type": "dff", "pins": {"d": "d", "q": "q", "clk": "clk"}}
+      },
+      "nets": ["clk", "d", "q"]
+    }
+  }
+}

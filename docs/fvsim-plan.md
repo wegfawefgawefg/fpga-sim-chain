@@ -1,9 +1,9 @@
 # FVSIM Plan (Simulator + Visualizer)
 
 ## Goals
+- The visual fabric view is a primary feature (pygame): see blocks and routes light up as nets toggle.
 - Load `*.fnet.json` and `*.fbit.json` produced by `fsc`.
 - Simulate logic with a simple clocked model.
-- Visualize per-block activity (pygame) for the fabric grid.
 
 ## Inputs
 - Netlist (`*.fnet.json`): logical graph + ports.

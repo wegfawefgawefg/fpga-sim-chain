@@ -1,0 +1,19 @@
+{
+  "top": "top",
+  "modules": {
+    "top": {
+      "ports": {
+        "a": {"dir": "in"},
+        "b": {"dir": "in"},
+        "y0": {"dir": "out"},
+        "y1": {"dir": "out"}
+      },
+      "cells": {
+        "u1": {"type": "xor2", "pins": {"a": "a", "b": "b", "y": "n1"}},
+        "u2": {"type": "and2", "pins": {"a": "n1", "b": "a", "y": "y0"}},
+        "u3": {"type": "or2", "pins": {"a": "n1", "b": "b", "y": "y1"}}
+      },
+      "nets": ["a", "b", "n1", "y0", "y1"]
+    }
+  }
+}

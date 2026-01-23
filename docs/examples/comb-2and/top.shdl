@@ -1,0 +1,10 @@
+(module top
+    (ports
+        (in a)
+        (in b)
+
+        (out y))
+
+    (wire n1)
+    (and2 u1 a b n1)
+    (not u2 n1 y))

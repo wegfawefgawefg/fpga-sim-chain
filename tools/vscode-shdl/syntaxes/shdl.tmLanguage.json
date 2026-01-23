@@ -1,0 +1,72 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "SHDL",
+  "scopeName": "source.shdl",
+  "patterns": [
+    {"include": "#comments"},
+    {"include": "#keywords"},
+    {"include": "#call_heads"},
+    {"include": "#pins"},
+    {"include": "#numbers"},
+    {"include": "#symbols"}
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.semicolon.shdl",
+          "match": ";.*$"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.shdl",
+          "match": "\\b(module|ports|wire|in|out)\\b"
+        },
+        {
+          "name": "support.function.builtin.shdl",
+          "match": "\\b(and2|or2|xor2|not|dff)\\b"
+        }
+      ]
+    },
+    "call_heads": {
+      "patterns": [
+        {
+          "name": "support.function.shdl",
+          "match": "\\(([^()\\s;]+)",
+          "captures": {
+            "1": {
+              "name": "support.function.shdl"
+            }
+          }
+        }
+      ]
+    },
+    "pins": {
+      "patterns": [
+        {
+          "name": "variable.parameter.shdl",
+          "match": "\\b(d|q|clk|rst)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.shdl",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "symbols": {
+      "patterns": [
+        {
+          "name": "variable.other.shdl",
+          "match": "[^()\\s;]+"
+        }
+      ]
+    }
+  }
+}

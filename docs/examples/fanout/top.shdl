@@ -1,0 +1,12 @@
+(module top
+    (ports
+        (in a)
+        (in b)
+
+        (out y0)
+        (out y1))
+
+    (wire n1)
+    (xor2 u1 a b n1)
+    (and2 u2 n1 a y0)
+    (or2 u3 n1 b y1))

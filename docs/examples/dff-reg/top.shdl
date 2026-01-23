@@ -1,0 +1,12 @@
+(module top
+    (ports
+        (in clk)
+        (in d)
+
+        (out q))
+
+    (dff
+        u1
+        (d d)
+        (q q)
+        (clk clk)))

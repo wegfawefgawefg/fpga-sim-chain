@@ -1,0 +1,34 @@
+{
+  "name": "shdl-syntax",
+  "publisher": "local",
+  "displayName": "SHDL Syntax",
+  "description": "Syntax highlighting for SHDL files",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "activationEvents": [
+    "onLanguage:shdl"
+  ],
+  "main": "./extension.js",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "shdl",
+        "aliases": ["SHDL", "shdl"],
+        "extensions": [".shdl"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "shdl",
+        "scopeName": "source.shdl",
+        "path": "./syntaxes/shdl.tmLanguage.json"
+      }
+    ]
+  }
+}

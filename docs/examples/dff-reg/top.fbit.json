@@ -1,0 +1,15 @@
+{
+  "fabric": {"w": 1, "h": 1},
+  "blocks": {
+    "x0y0": {
+      "mode": "dff",
+      "inputs": ["d"],
+      "ff": {"d": "d", "q": "q", "clk": "clk"}
+    }
+  },
+  "routes": [
+    {"net": "clk", "path": ["in:clk", "x0y0.clk"]},
+    {"net": "d", "path": ["in:d", "x0y0.d"]},
+    {"net": "q", "path": ["x0y0.q", "out:q"]}
+  ]
+}

@@ -188,6 +188,12 @@ cython_debug/
 #  you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 
+# Local VSCode extension packages
+tools/vscode-shdl/*.vsix
+
+# macOS
+.DS_Store
+
 # Ruff stuff:
 .ruff_cache/
 

@@ -1,19 +1,18 @@
 # FSC Plan (Compiler)
 
 ## Goals
-- Compile a minimal Verilog subset into a fabric-agnostic netlist plus a fabric-specific bitstream.
+- Compile a minimal SHDL (S-expr HDL) subset into a fabric-agnostic netlist plus a fabric-specific bitstream.
 - Keep the first iteration small so `fvsim` can simulate and visualize quickly.
 
-## Minimal Verilog Subset (v0)
+## Minimal SHDL Subset (v0)
 - Single module per file; no parameterization or generate.
-- `input`, `output`, `wire` declarations.
-- Continuous `assign` for simple expressions (`&`, `|`, `^`, `~`, `+` optional).
-- Explicit primitive instances: `and`, `or`, `xor`, `not`, `dff` (clocked).
+- `ports` and `wire` declarations.
+- Explicit primitive instances: `and2`, `or2`, `xor2`, `not`, `dff` (clocked).
 - No tri-state, memories, or blocking timing semantics.
 
 ## Compilation Pipeline
 1. **Parse/Lower**
-   - Parse Verilog subset into a simple IR: modules, ports, nets, cells.
+   - Parse SHDL subset into a simple IR: modules, ports, nets, cells.
    - Normalize expressions to 2-input gates + inverters.
 2. **Netlist Emit (Fabric-Agnostic)**
    - Emit a JSON netlist that captures logic graph.
@@ -76,7 +75,7 @@ Notes:
 - `routes` records routing paths as ordered waypoints.
 
 ## CLI Sketch
-- `fsc compile --in top.v --out build/`
+- `fsc compile --in top.shdl --out build/`
   - Emits `build/top.fnet.json` and `build/top.fbit.json`
 
 ## Milestones
