@@ -1,0 +1,17 @@
+{
+  "top": "top",
+  "modules": {
+    "top": {
+      "ports": {
+        "a": {"dir": "in"},
+        "b": {"dir": "in"},
+        "y": {"dir": "out"}
+      },
+      "cells": {
+        "u1": {"type": "and2", "pins": {"a": "a", "b": "b", "y": "n1"}},
+        "u2": {"type": "not", "pins": {"a": "n1", "y": "y"}}
+      },
+      "nets": ["a", "b", "n1", "y"]
+    }
+  }
+}

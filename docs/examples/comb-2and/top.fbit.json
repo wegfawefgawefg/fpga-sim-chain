@@ -1,0 +1,13 @@
+{
+  "fabric": {"w": 2, "h": 1},
+  "blocks": {
+    "x0y0": {"mode": "and2", "inputs": ["a", "b"], "ff": null},
+    "x1y0": {"mode": "not", "inputs": ["n1"], "ff": null}
+  },
+  "routes": [
+    {"net": "a", "path": ["in:a", "x0y0.a"]},
+    {"net": "b", "path": ["in:b", "x0y0.b"]},
+    {"net": "n1", "path": ["x0y0.y", "x1y0.a"]},
+    {"net": "y", "path": ["x1y0.y", "out:y"]}
+  ]
+}
