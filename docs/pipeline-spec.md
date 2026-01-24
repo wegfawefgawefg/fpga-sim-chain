@@ -89,13 +89,32 @@ symbol      = /[^()\\s;]+/ ;
 ### Shape
 ```
 {
-  "fabric": {"w": 4, "h": 4},
+  "fabric": {
+    "w": 4,
+    "h": 4,
+    "tracks": 4,
+    "pins_per_side": 4,
+    "switch_box": "wilton",
+    "cb_tracks": "all"
+  },
   "blocks": {
     "x0y0": {"mode": "and2", "inputs": ["a", "b"], "ff": null}
   },
-  "routes": [
-    {"net": "a", "path": ["in:a", "x0y0.a"]}
-  ]
+  "routes": {
+    "nets": [
+      {"net": "a", "path": ["in:a", "x0y0.a"]}
+    ],
+    "segments": [
+      {"net": "a", "dir": "h", "row": 1, "track": 0, "col0": 0, "col1": 3},
+      {"net": "a", "dir": "v", "col": 2, "track": 1, "row0": 0, "row1": 2}
+    ],
+    "switches": [
+      {"net": "a", "sb": "x2y1", "from": ["h", 0], "to": ["v", 1]}
+    ],
+    "taps": [
+      {"net": "a", "cb": "x2y1", "side": "w", "track": 0}
+    ]
+  }
 }
 ```
 
@@ -106,7 +125,14 @@ symbol      = /[^()\\s;]+/ ;
 - `ff`: `null` or an object for `dff` use:
   - `{ "d": "net", "q": "net", "clk": "clk", "rst": "rst" }`
 
-### Routing Paths
+### Fabric Spec
+- `w`, `h`: grid size in CLB tiles.
+- `tracks`: number of routing tracks per channel.
+- `switch_box`: topology, e.g. `wilton`.
+- `cb_tracks`: which tracks are connectable to CLB pins (`all` for v0).
+
+### Routing (Two Levels)
+`routes.nets` (high-level):
 - A route is a list of waypoints from source to sink.
 - Waypoints are simple string tokens:
   - `in:<port>` for top-level inputs
@@ -115,7 +141,16 @@ symbol      = /[^()\\s;]+/ ;
 - Valid `<pin>` values:
   - `a`, `b`, `y` for combinational inputs/outputs
   - `d`, `q`, `clk`, `rst` for `dff` pins
-- `fvsim` resolves point-to-point connectivity by concatenating these paths.
+
+`routes.segments` (low-level, fabric-aware):
+- Horizontal segments: `{ "dir": "h", "row": <sb_row>, "track": <t>, "col0": <c0>, "col1": <c1> }`
+- Vertical segments: `{ "dir": "v", "col": <sb_col>, "track": <t>, "row0": <r0>, "row1": <r1> }`
+
+`routes.switches` (switch-box turns):
+- `{ "sb": "xNyM", "from": ["h"|"v", <t>], "to": ["h"|"v", <t>] }`
+
+`routes.taps` (connection-box taps):
+- `{ "cb": "xNyM", "side": "n"|"s"|"e"|"w", "track": <t>, "pin": <p> }`
 
 ## Simulation Expectations
 - Combinational logic evaluated in topological order each tick.

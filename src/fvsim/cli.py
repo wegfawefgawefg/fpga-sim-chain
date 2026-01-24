@@ -26,6 +26,18 @@ def main() -> None:
         help="Comma-separated inputs (e.g., a=0,b=1). Values: 0,1,X",
     )
 
+    vis_parser = sub.add_parser("visual", help="Open a pygame window with the fabric grid")
+    vis_parser.add_argument("--bit", help="Input .fbit.json")
+    vis_parser.add_argument("--grid", default="4x4", help="Grid size like 8x8")
+    vis_parser.add_argument("--demo", action="store_true", help="Show synthetic routes")
+    vis_parser.add_argument("--headless", action="store_true", help="Run without opening a window")
+    vis_parser.add_argument(
+        "--runtime",
+        type=float,
+        default=0.0,
+        help="Seconds to run in visual mode (0 = run until quit)",
+    )
+
     args = parser.parse_args()
 
     if args.cmd == "run":
@@ -33,6 +45,19 @@ def main() -> None:
         inputs = _parse_inputs(args.inputs)
         results = simulate(design, inputs, ticks=args.ticks)
         _print_results(design.nets, results)
+    if args.cmd == "visual":
+        from .visual import run_visual
+
+        if not args.demo and not args.bit:
+            raise SystemExit("--bit is required unless --demo is set")
+        bit_path = Path(args.bit) if args.bit else None
+        run_visual(
+            bit_path,
+            grid=args.grid,
+            demo=args.demo,
+            headless=args.headless,
+            runtime=args.runtime,
+        )
 
 
 def _parse_inputs(raw: str) -> dict[str, str]:

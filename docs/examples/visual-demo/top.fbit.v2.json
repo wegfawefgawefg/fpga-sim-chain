@@ -1,0 +1,28 @@
+{
+  "fabric": {"w": 4, "h": 4, "tracks": 4, "switch_box": "wilton", "cb_tracks": "all"},
+  "blocks": {
+    "x0y0": {"mode": "and2", "inputs": ["a", "b"], "ff": null}
+  },
+  "routes": {
+    "nets": [
+      {"net": "net1", "path": ["in:a", "x0y0.a", "out:y0"]}
+    ],
+    "segments": [
+      {"net": "net1", "dir": "h", "row": 1, "track": 0, "col0": 0, "col1": 4},
+      {"net": "net2", "dir": "v", "col": 2, "track": 1, "row0": 0, "row1": 4},
+      {"net": "net3", "dir": "h", "row": 3, "track": 2, "col0": 1, "col1": 4},
+      {"net": "net3", "dir": "v", "col": 4, "track": 2, "row0": 1, "row1": 3},
+      {"net": "net4", "dir": "v", "col": 0, "track": 3, "row0": 0, "row1": 4}
+    ],
+    "switches": [
+      {"net": "net3", "sb": "x4y3", "from": ["h", 2], "to": ["v", 2]},
+      {"net": "net1", "sb": "x0y1", "from": ["h", 0], "to": ["h", 0]}
+    ],
+    "taps": [
+      {"net": "net1", "cb": "x0y1", "side": "w", "track": 0, "pin": 0},
+      {"net": "net1", "cb": "x3y1", "side": "e", "track": 0, "pin": 1},
+      {"net": "net2", "cb": "x1y1", "side": "n", "track": 1, "pin": 2},
+      {"net": "net2", "cb": "x1y3", "side": "s", "track": 1, "pin": 3}
+    ]
+  }
+}

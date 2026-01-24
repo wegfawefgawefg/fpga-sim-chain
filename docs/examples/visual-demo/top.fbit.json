@@ -1,0 +1,16 @@
+{
+  "fabric": {"w": 4, "h": 4},
+  "blocks": {
+    "x0y0": {"mode": "and2", "inputs": ["a", "b"], "ff": null},
+    "x1y0": {"mode": "xor2", "inputs": ["a", "b"], "ff": null},
+    "x2y0": {"mode": "or2", "inputs": ["a", "b"], "ff": null},
+    "x3y0": {"mode": "not", "inputs": ["a"], "ff": null},
+    "x0y1": {"mode": "dff", "inputs": ["d"], "ff": {"d": "d", "q": "q", "clk": "clk"}}
+  },
+  "routes": [
+    {"net": "net1", "path": ["in:a", "x0y0.a", "x3y0.y", "out:y0"]},
+    {"net": "net2", "path": ["in:b", "x1y0.a", "x1y3.a", "out:y1"]},
+    {"net": "net3", "path": ["in:c", "x2y0.a", "x2y2.a", "x0y2.y", "out:y2"]},
+    {"net": "net0", "path": ["in:d", "x0y1.a", "x0y1.clk", "x3y1.clk", "out:y3"]}
+  ]
+}

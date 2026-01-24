@@ -37,10 +37,12 @@
   - 0: dark, 1: bright, X: gray.
 - Optional overlay showing last toggle time or activity heatmap.
 - Left panel for IO pin values and clock tick count.
+ - Static fabric view first (grid + block labels), then animate nets.
 
 ## CLI Sketch
 - `fvsim run --net build/top.fnet.json --bit build/top.fbit.json`
 - `fvsim run --net ... --bit ... --ticks 100 --clock 10ms`
+- `fvsim visual --bit build/top.fbit.json`
 
 ## Milestones
 1. Load netlist/bitstream and build connectivity graph.
