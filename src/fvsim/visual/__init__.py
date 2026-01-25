@@ -304,7 +304,7 @@ def _handle_zoom(
 ) -> tuple[float, float, float]:
     zoom_step = 0.18
     new_zoom = zoom + (zoom_step * wheel_delta)
-    new_zoom = max(0.2, min(12.0, new_zoom))
+    new_zoom = max(0.2, min(20.0, new_zoom))
     if new_zoom == zoom:
         return zoom, pan_x, pan_y
 

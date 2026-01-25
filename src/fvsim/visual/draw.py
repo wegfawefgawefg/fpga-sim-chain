@@ -591,16 +591,29 @@ def _draw_clb_internals(
             pygame.draw.line(surface, pin_color, (x_world, jog_y), (entry_x, jog_y), 1)
             pygame.draw.line(surface, pin_color, (entry_x, jog_y), (entry_x, omux_bottom), 1)
 
+    xbar_gap = max(4, int(w * 0.015))
     slice_area = (
-        in_xbar_rect[0] + in_xbar_rect[2],
+        in_xbar_rect[0] + in_xbar_rect[2] + xbar_gap,
         inner[1],
-        inner[2] - (in_xbar_rect[2] + out_xbar_rect[2]),
+        inner[2] - (in_xbar_rect[2] + out_xbar_rect[2]) - xbar_gap * 2,
         inner[3],
     )
+    slice_area_rect = (
+        int(slice_area[0]),
+        int(slice_area[1]),
+        int(slice_area[2]),
+        int(slice_area[3]),
+    )
+    pygame.draw.rect(surface, (58, 62, 72), slice_area_rect, 1)
+    slice_area_label = font.render("SLICES", True, (120, 120, 130))
+    surface.blit(slice_area_label, (slice_area_rect[0] + 2, slice_area_rect[1] + 2))
     slice_w = slice_area[2] / cols if cols else inner[2]
     slice_h = slice_area[3] / rows if rows else inner[3]
-    slice_pad = max(2, int(min(slice_w, slice_h) * 0.08))
+    slice_pad = max(3, int(min(slice_w, slice_h) * 0.12))
     lut_inputs = max(1, lut_k)
+    top_bus_y = int(slice_area[1] + 2)
+    bottom_bus_y = int(slice_area[1] + slice_area[3] - 2)
+    mid_bus_y = int(slice_area[1] + slice_area[3] * 0.5)
 
     for idx in range(slice_count):
         r = idx // cols
@@ -613,17 +626,36 @@ def _draw_clb_internals(
         pygame.draw.rect(surface, (62, 68, 78), slice_rect, 1)
         slice_label = font.render(f"S{idx}", True, (140, 140, 150))
         surface.blit(slice_label, (slice_rect[0] + 2, slice_rect[1] + 2))
-        lut_w = int(sw * 0.6)
-        ff_w = int(sw * 0.22)
-        box_h = int(sh)
+        inner_pad = max(2, int(min(sw, sh) * 0.06))
+        lut_w = int(sw * 0.64)
+        ff_w = int(sw * 0.18)
+        box_h = int(sh - inner_pad * 2)
         imux_w = max(6, int(sw * 0.12))
-        imux_x = int(sx)
-        imux_rect = (imux_x, int(sy + sh * 0.2), imux_w, int(sh * 0.6))
-        lut_rect = (int(imux_rect[0] + imux_w + slice_pad), int(sy), lut_w - slice_pad, box_h)
+        imux_x = int(sx + inner_pad)
+        imux_rect = (imux_x, int(sy + inner_pad + sh * 0.2), imux_w, int(sh * 0.6 - inner_pad))
+        imux_gap = max(2, int(sw * 0.03))
+        lut_rect = (
+            int(imux_rect[0] + imux_w + imux_gap),
+            int(sy + inner_pad),
+            int(lut_w - imux_gap - inner_pad),
+            box_h,
+        )
         ff_h = int(box_h * 0.5)
-        ff_rect = (int(sx + sw - ff_w), int(sy + box_h - ff_h), ff_w, ff_h)
+        ff_rect = (
+            int(sx + sw - ff_w - inner_pad),
+            int(sy + inner_pad + box_h - ff_h),
+            ff_w,
+            ff_h,
+        )
+        lut_rect = (
+            lut_rect[0],
+            lut_rect[1],
+            min(lut_rect[2], ff_rect[0] - lut_rect[0] - inner_pad),
+            lut_rect[3],
+        )
         mux_x = ff_rect[0] + ff_rect[2] + max(1, slice_pad // 2)
         mid_y = int(sy + box_h // 2)
+        imux_bus_y = top_bus_y if r == 0 else bottom_bus_y
         ff_mid_y = int(ff_rect[1] + ff_rect[3] * 0.5)
         pass_y = int(sy + box_h * 0.3)
 
@@ -640,15 +672,15 @@ def _draw_clb_internals(
         lut_out_x = lut_rect[0] + lut_rect[2]
         ff_in_x = ff_rect[0]
         ff_out_x = ff_rect[0] + ff_rect[2]
-        # IN XBAR -> IMUX
+        # IMUX routing lanes go around slices (top/bottom bus), then drop into slice.
         pygame.draw.line(
             surface,
             (100, 100, 110),
-            (in_xbar_rect[0] + in_xbar_rect[2], mid_y),
-            (imux_rect[0], mid_y),
+            (in_xbar_rect[0] + in_xbar_rect[2], imux_bus_y),
+            (imux_rect[0], imux_bus_y),
             1,
         )
-        # IMUX -> LUT input
+        pygame.draw.line(surface, (100, 100, 110), (imux_rect[0], imux_bus_y), (imux_rect[0], mid_y), 1)
         pygame.draw.line(
             surface,
             (120, 120, 130),
@@ -672,11 +704,21 @@ def _draw_clb_internals(
         # Converge both paths into the mux and a single output.
         pygame.draw.line(surface, (120, 120, 130), (mux_x, pass_y), (mux_x, mux_cy), 1)
         pygame.draw.line(surface, (120, 120, 130), (mux_x, ff_mid_y), (mux_x, mux_cy), 1)
+        lane_offset = (c * 2 - (cols - 1)) * 3
+        out_bus_y = max(slice_area_rect[1] + 4, min(mid_bus_y + lane_offset, slice_area_rect[1] + slice_area_rect[3] - 4))
+        pygame.draw.line(surface, (120, 120, 130), (mux_x + mux_h, mux_cy), (mux_x + mux_h + 4, mux_cy), 1)
         pygame.draw.line(
             surface,
             (120, 120, 130),
-            (mux_x + mux_h, mux_cy),
-            (out_xbar_rect[0], mux_cy),
+            (mux_x + mux_h + 4, mux_cy),
+            (mux_x + mux_h + 4, out_bus_y),
+            1,
+        )
+        pygame.draw.line(
+            surface,
+            (120, 120, 130),
+            (mux_x + mux_h + 4, out_bus_y),
+            (out_xbar_rect[0], out_bus_y),
             1,
         )
 
