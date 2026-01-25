@@ -130,6 +130,9 @@ symbol      = /[^()\\s;]+/ ;
 - `tracks`: number of routing tracks per channel.
 - `switch_box`: topology, e.g. `wilton`.
 - `cb_tracks`: which tracks are connectable to CLB pins (`all` for v0).
+- `pins_per_side`: number of CLB pins per side (I/O stubs for connection boxes).
+- `slices_per_clb`: number of LUT/FF slices per CLB (default 4).
+- `lut_k`: LUT input count per slice (e.g., 4 or 6).
 
 ### Routing (Two Levels)
 `routes.nets` (high-level):

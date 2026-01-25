@@ -58,6 +58,7 @@ def run_visual(
     show_cb_labels = True
     show_sb_labels = True
     show_lane_labels = True
+    show_clb_internals = True
     running = True
     start_time = time.time()
     dragging = False
@@ -78,6 +79,8 @@ def run_visual(
                     show_sb_labels = not show_sb_labels
                 if event.key == pygame.K_4:
                     show_lane_labels = not show_lane_labels
+                if event.key == pygame.K_5:
+                    show_clb_internals = not show_clb_internals
             if event.type == pygame.MOUSEWHEEL:
                 zoom, pan_x, pan_y = _handle_zoom(
                     zoom,
@@ -119,6 +122,8 @@ def run_visual(
             connections_for=_demo_sb_connections,
         )
         pins_per_side = routing.fabric.get("pins_per_side", 4)
+        slices_per_clb = routing.fabric.get("slices_per_clb", 4)
+        lut_k = routing.fabric.get("lut_k", 4)
         draw_connection_boxes(
             surface,
             origin_xy,
@@ -131,7 +136,19 @@ def run_visual(
             taps_for=_demo_cb_taps,
         )
         # Routing overlays disabled while we refine connection rendering.
-        draw_clbs(surface, origin_xy, cell, grid_w, grid_h, font, pins_per_side, show_clb_labels)
+        draw_clbs(
+            surface,
+            origin_xy,
+            cell,
+            grid_w,
+            grid_h,
+            font,
+            pins_per_side,
+            show_clb_labels,
+            show_clb_internals,
+            slices_per_clb,
+            lut_k,
+        )
 
         if runtime and (time.time() - start_time) >= runtime:
             running = False

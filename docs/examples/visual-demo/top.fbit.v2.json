@@ -1,5 +1,14 @@
 {
-  "fabric": {"w": 4, "h": 4, "tracks": 4, "switch_box": "wilton", "cb_tracks": "all"},
+  "fabric": {
+    "w": 4,
+    "h": 4,
+    "tracks": 4,
+    "switch_box": "wilton",
+    "cb_tracks": "all",
+    "pins_per_side": 4,
+    "slices_per_clb": 4,
+    "lut_k": 4
+  },
   "blocks": {
     "x0y0": {"mode": "and2", "inputs": ["a", "b"], "ff": null}
   },
