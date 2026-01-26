@@ -9,6 +9,8 @@ from .draw import (
     Connection,
     draw_clbs,
     draw_connection_boxes,
+    draw_io_pads,
+    draw_route_arrow,
     draw_route_polyline,
     draw_switch_boxes,
     draw_tracks,
@@ -32,7 +34,7 @@ def run_visual(
     if headless:
         os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
-    routing = load_routing(bit_path) if bit_path and not demo else RoutingData([], [], [], [], {})
+    routing = load_routing(bit_path) if bit_path and not demo else RoutingData([], [], [], [], {}, {}, {})
     grid_w, grid_h = _parse_grid(grid)
     if routing.fabric.get("w"):
         grid_w = routing.fabric.get("w")
@@ -66,6 +68,8 @@ def run_visual(
     rng = random.Random(0xC0DE)
     lut_tables: dict[tuple[int, int, int], list[int]] = {}
     omux_maps: dict[tuple[int, int], list[tuple[str, int, bool]]] = {}
+    imux_maps: dict[tuple[int, int], list[list[str]]] = {}
+    ff_state: dict[tuple[int, int, int], dict[str, int]] = {}
     dragging = False
     last_mouse = (0, 0)
     while running:
@@ -113,11 +117,22 @@ def run_visual(
         cell = max(8, int(base_cell * zoom))
         origin_xy = (int(base_origin[0] + pan_x), int(base_origin[1] + pan_y))
         tick = int((time.time() - start_time) * 2)
-        inputs = [(tick >> i) & 1 for i in range(4)]
 
         surface.fill((18, 18, 20))
         _draw_grid(surface, origin_xy, cell, grid_w, grid_h)
-        draw_tracks(surface, origin_xy, cell, grid_w, grid_h, label_font, show_lane_labels)
+        draw_tracks(
+            surface,
+            origin_xy,
+            cell,
+            grid_w,
+            grid_h,
+            label_font,
+            show_lane_labels,
+            routing.fabric.get("tracks", 4),
+            routing.fabric.get("track_dirs"),
+            routing.fabric.get("routing_dir", "bi"),
+        )
+        sb_connections = _routing_sb_connections(routing) if not demo else None
         draw_switch_boxes(
             surface,
             origin_xy,
@@ -126,11 +141,16 @@ def run_visual(
             grid_h,
             label_font,
             show_sb_labels,
-            connections_for=_demo_sb_connections,
+            routing.fabric.get("tracks", 4),
+            routing.fabric.get("track_dirs"),
+            routing.fabric.get("routing_dir", "bi"),
+            connections_for=_demo_sb_connections if demo else sb_connections,
         )
         pins_per_side = routing.fabric.get("pins_per_side", 4)
         slices_per_clb = routing.fabric.get("slices_per_clb", 4)
         lut_k = routing.fabric.get("lut_k", 4)
+        inputs = [0] * max(1, lut_k) if not demo else [(tick >> i) & 1 for i in range(4)]
+        cb_taps = _routing_cb_taps(routing) if not demo else None
         draw_connection_boxes(
             surface,
             origin_xy,
@@ -140,9 +160,22 @@ def run_visual(
             label_font,
             pins_per_side,
             show_cb_labels,
-            taps_for=_demo_cb_taps,
+            routing.fabric.get("tracks", 4),
+            routing.fabric.get("track_dirs"),
+            routing.fabric.get("routing_dir", "bi"),
+            taps_for=_demo_cb_taps if demo else cb_taps,
         )
-        # Routing overlays disabled while we refine connection rendering.
+        draw_io_pads(
+            surface,
+            origin_xy,
+            cell,
+            grid_w,
+            grid_h,
+            routing.io,
+            label_font,
+        )
+        if routing.segments or routing.switches or routing.taps:
+            _draw_routes(surface, routing, origin_xy, cell, grid_w, grid_h)
         draw_clbs(
             surface,
             origin_xy,
@@ -159,7 +192,10 @@ def run_visual(
             lut_tables,
             rng,
             omux_maps,
+            imux_maps,
+            ff_state,
             inputs,
+            routing.clb,
         )
 
         if runtime and (time.time() - start_time) >= runtime:
@@ -178,16 +214,19 @@ def _draw_routes(
     grid_w: int,
     grid_h: int,
 ) -> None:
+    if not routing.segments:
+        return
     for segment in routing.segments:
-        seg = segment_points(segment, origin_xy, cell)
+        seg = segment_points(segment, origin_xy, cell, routing.fabric)
         if seg:
             draw_route_polyline(surface, list(seg), _net_color(segment.net))
+            draw_route_arrow(surface, seg[0], seg[1], segment.flow, _net_color(segment.net))
     for sw in routing.switches:
         pt = switch_point(sw.sb, origin_xy, cell)
         if pt:
             _draw_switch_marker(surface, pt, _net_color(sw.net))
     for tap in routing.taps:
-        pt = tap_point(tap, origin_xy, cell)
+        pt = tap_point(tap, origin_xy, cell, routing.fabric)
         if pt:
             _draw_tap_marker(surface, pt, _net_color(tap.net))
 
@@ -214,6 +253,65 @@ def _draw_tap_marker(surface, pt: tuple[int, int], color: tuple[int, int, int]) 
     import pygame
 
     pygame.draw.rect(surface, color, (pt[0] - 2, pt[1] - 2, 4, 4))
+
+
+def _routing_cb_taps(routing: RoutingData):
+    tap_map: dict[tuple[int, int, str], list[tuple[str, int, int]]] = {}
+    for tap in routing.taps:
+        x, y = _parse_block_coord(tap.cb)
+        if x is None or y is None:
+            continue
+        key = (x, y, tap.side)
+        tap_map.setdefault(key, []).append((tap.side, tap.track, tap.pin))
+
+    def taps_for(cb_col: int, cb_row: int, side: str):
+        return tap_map.get((cb_col, cb_row, side), [])
+
+    return taps_for
+
+
+def _routing_sb_connections(routing: RoutingData):
+    conn_map: dict[tuple[int, int], list[Connection]] = {}
+    for sw in routing.switches:
+        x, y = _parse_block_coord(sw.sb)
+        if x is None or y is None:
+            continue
+        side_in = _flow_to_side_in(sw.from_flow, sw.from_dir)
+        side_out = _flow_to_side_out(sw.to_flow, sw.to_dir)
+        if side_in is None or side_out is None:
+            continue
+        conn_map.setdefault((x, y), []).append((side_in, sw.from_track, side_out, sw.to_track))
+
+    def connections_for(col: int, row: int):
+        return conn_map.get((col // 2, row // 2), [])
+
+    return connections_for
+
+
+def _flow_to_side_in(flow: str | None, direction: str) -> str | None:
+    if direction == "h":
+        return "w" if flow == "e" else "e" if flow == "w" else None
+    if direction == "v":
+        return "n" if flow == "s" else "s" if flow == "n" else None
+    return None
+
+
+def _flow_to_side_out(flow: str | None, direction: str) -> str | None:
+    if direction == "h":
+        return "e" if flow == "e" else "w" if flow == "w" else None
+    if direction == "v":
+        return "s" if flow == "s" else "n" if flow == "n" else None
+    return None
+
+
+def _parse_block_coord(name: str) -> tuple[int | None, int | None]:
+    if not name.startswith("x") or "y" not in name:
+        return None, None
+    try:
+        x_str, y_str = name[1:].split("y", 1)
+        return int(x_str), int(y_str)
+    except ValueError:
+        return None, None
 
 
 def _demo_sb_connections(col: int, row: int) -> list[Connection]:

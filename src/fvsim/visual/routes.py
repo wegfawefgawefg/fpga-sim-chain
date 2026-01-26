@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 
-from .layout import TRACKS, node_center, track_offsets
+from .layout import node_center, track_offsets
+
+DEFAULT_TRACKS = 4
 
 
 @dataclass
@@ -17,6 +19,7 @@ class Route:
 class Segment:
     net: str
     dir: str
+    flow: str | None = None
     row: int | None = None
     col: int | None = None
     track: int | None = None
@@ -34,6 +37,8 @@ class Switch:
     from_track: int
     to_dir: str
     to_track: int
+    from_flow: str | None = None
+    to_flow: str | None = None
 
 
 @dataclass
@@ -52,6 +57,8 @@ class RoutingData:
     switches: list[Switch]
     taps: list[Tap]
     fabric: dict
+    clb: dict
+    io: dict
 
 
 def load_routing(bit_path: Path) -> RoutingData:
@@ -73,6 +80,7 @@ def load_routing(bit_path: Path) -> RoutingData:
                 Segment(
                     net=seg.get("net", ""),
                     dir=seg.get("dir", ""),
+                    flow=seg.get("flow"),
                     row=seg.get("row"),
                     col=seg.get("col"),
                     track=seg.get("track"),
@@ -91,6 +99,8 @@ def load_routing(bit_path: Path) -> RoutingData:
                     from_track=sw.get("from", ["", 0])[1],
                     to_dir=sw.get("to", ["", 0])[0],
                     to_track=sw.get("to", ["", 0])[1],
+                    from_flow=sw.get("from_flow"),
+                    to_flow=sw.get("to_flow"),
                 )
             )
         for tap in routes_block.get("taps", []):
@@ -110,6 +120,8 @@ def load_routing(bit_path: Path) -> RoutingData:
         switches=switches_list,
         taps=taps_list,
         fabric=data.get("fabric", {}),
+        clb=data.get("clb", {}),
+        io=data.get("io", {}),
     )
 
 
@@ -136,16 +148,58 @@ def segment_points(
     segment: Segment,
     origin: tuple[int, int],
     cell: int,
+    fabric: dict,
 ) -> tuple[tuple[int, int], tuple[int, int]] | None:
+    tracks, track_dirs, routing_dir = _track_layout(fabric)
     if segment.dir == "h" and segment.row is not None:
         return (
-            _sb_track_point(origin, cell, segment.col0 or 0, segment.row, segment.track or 0, True),
-            _sb_track_point(origin, cell, segment.col1 or 0, segment.row, segment.track or 0, True),
+            _sb_track_point(
+                origin,
+                cell,
+                segment.col0 or 0,
+                segment.row,
+                segment.track or 0,
+                True,
+                tracks,
+                track_dirs,
+                routing_dir,
+            ),
+            _sb_track_point(
+                origin,
+                cell,
+                segment.col1 or 0,
+                segment.row,
+                segment.track or 0,
+                True,
+                tracks,
+                track_dirs,
+                routing_dir,
+            ),
         )
     if segment.dir == "v" and segment.col is not None:
         return (
-            _sb_track_point(origin, cell, segment.col, segment.row0 or 0, segment.track or 0, False),
-            _sb_track_point(origin, cell, segment.col, segment.row1 or 0, segment.track or 0, False),
+            _sb_track_point(
+                origin,
+                cell,
+                segment.col,
+                segment.row0 or 0,
+                segment.track or 0,
+                False,
+                tracks,
+                track_dirs,
+                routing_dir,
+            ),
+            _sb_track_point(
+                origin,
+                cell,
+                segment.col,
+                segment.row1 or 0,
+                segment.track or 0,
+                False,
+                tracks,
+                track_dirs,
+                routing_dir,
+            ),
         )
     return None
 
@@ -157,13 +211,19 @@ def switch_point(sb: str, origin: tuple[int, int], cell: int) -> tuple[int, int]
     return node_center(origin, cell, x * 2, y * 2)
 
 
-def tap_point(tap: Tap, origin: tuple[int, int], cell: int) -> tuple[int, int] | None:
+def tap_point(
+    tap: Tap, origin: tuple[int, int], cell: int, fabric: dict
+) -> tuple[int, int] | None:
     x, y = _parse_block_coord(tap.cb)
     if x is None or y is None:
         return None
     row = 2 * y + 1
     col = 2 * x + 1
-    offsets = track_offsets(cell)
+    tracks, track_dirs, routing_dir = _track_layout(fabric)
+    if tap.side in ("n", "s"):
+        offsets = track_offsets(cell, tracks, track_dirs, "h", routing_dir)
+    else:
+        offsets = track_offsets(cell, tracks, track_dirs, "v", routing_dir)
     off = offsets[min(max(tap.track, 0), len(offsets) - 1)]
     if tap.side == "w":
         px, py = node_center(origin, cell, col - 1, row)
@@ -187,11 +247,15 @@ def _sb_track_point(
     sb_row: int,
     track: int,
     horizontal: bool,
+    tracks: int,
+    track_dirs: dict[str, int] | None,
+    routing_dir: str,
 ) -> tuple[int, int]:
     col = sb_col * 2
     row = sb_row * 2
     cx, cy = node_center(origin, cell, col, row)
-    offsets = track_offsets(cell)
+    orientation = "h" if horizontal else "v"
+    offsets = track_offsets(cell, tracks, track_dirs, orientation, routing_dir)
     off = offsets[min(max(track, 0), len(offsets) - 1)]
     if horizontal:
         return (cx, cy + off)
@@ -253,7 +317,14 @@ def _track_point(
 def _track_index(net: str) -> int:
     if not net:
         return 0
-    return sum(ord(ch) for ch in net) % max(1, TRACKS)
+    return sum(ord(ch) for ch in net) % max(1, DEFAULT_TRACKS)
+
+
+def _track_layout(fabric: dict) -> tuple[int, dict[str, int] | None, str]:
+    tracks = int(fabric.get("tracks", DEFAULT_TRACKS))
+    track_dirs = fabric.get("track_dirs")
+    routing_dir = fabric.get("routing_dir", "bi")
+    return tracks, track_dirs, routing_dir
 
 
 def _nudge_to_edge(

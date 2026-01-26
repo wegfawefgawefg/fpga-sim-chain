@@ -58,6 +58,19 @@ symbol      = /[^()\\s;]+/ ;
 ### Shape
 ```
 {
+  "fabric": {
+    "w": 4,
+    "h": 4,
+    "tracks": 4,
+    "pins_per_side": 4,
+    "switch_box": "wilton",
+    "cb_tracks": "all",
+    "routing_dir": "uni",
+    "turn_cost": 0.2,
+    "track_dirs": {"e": 2, "w": 2, "n": 2, "s": 2},
+    "slices_per_clb": 4,
+    "lut_k": 4
+  },
   "top": "module_name",
   "modules": {
     "module_name": {
@@ -115,6 +128,10 @@ symbol      = /[^()\\s;]+/ ;
       {"net": "a", "cb": "x2y1", "side": "w", "track": 0}
     ]
   }
+  "io": {
+    "in": [{"name": "a", "x": 0, "y": 0, "side": "w"}],
+    "out": [{"name": "y", "x": 3, "y": 0, "side": "e"}]
+  }
 }
 ```
 
@@ -133,6 +150,20 @@ symbol      = /[^()\\s;]+/ ;
 - `pins_per_side`: number of CLB pins per side (I/O stubs for connection boxes).
 - `slices_per_clb`: number of LUT/FF slices per CLB (default 4).
 - `lut_k`: LUT input count per slice (e.g., 4 or 6).
+- `routing_dir`: routing directionality (`uni` or `bi`).
+- `turn_cost`: extra routing cost for directional turns (router heuristic).
+- `track_dirs`: optional per-direction track counts per channel. For horizontal channels,
+  `e` + `w` must equal `tracks`. For vertical channels, `n` + `s` must equal `tracks`.
+  Example:
+  - `"track_dirs": {"e": 2, "w": 2, "n": 2, "s": 2}`
+
+### Fabric Spec File
+`fsc bit` can load a standalone fabric spec JSON file. Keys mirror the `fabric` block
+in the `*.fbit.json` output. Missing keys fall back to CLI defaults.
+
+Example: `docs/fabric/default.fabric.json`.
+- `pin_sides`: optional per-cell pin side mapping. Example:
+  - `"pin_sides": {"and2": {"a":"w", "b":"n", "y":"e"}, "dff": {"d":"w", "q":"e", "clk":"s"}}`
 
 ### Routing (Two Levels)
 `routes.nets` (high-level):
@@ -146,14 +177,26 @@ symbol      = /[^()\\s;]+/ ;
   - `d`, `q`, `clk`, `rst` for `dff` pins
 
 `routes.segments` (low-level, fabric-aware):
-- Horizontal segments: `{ "dir": "h", "row": <sb_row>, "track": <t>, "col0": <c0>, "col1": <c1> }`
-- Vertical segments: `{ "dir": "v", "col": <sb_col>, "track": <t>, "row0": <r0>, "row1": <r1> }`
+- Horizontal segments: `{ "dir": "h", "row": <sb_row>, "track": <t>, "col0": <c0>, "col1": <c1>, "flow": "e"|"w" }`
+- Vertical segments: `{ "dir": "v", "col": <sb_col>, "track": <t>, "row0": <r0>, "row1": <r1>, "flow": "n"|"s" }`
 
 `routes.switches` (switch-box turns):
-- `{ "sb": "xNyM", "from": ["h"|"v", <t>], "to": ["h"|"v", <t>] }`
+- `{ "sb": "xNyM", "from": ["h"|"v", <t>], "to": ["h"|"v", <t>], "from_flow": "n"|"s"|"e"|"w", "to_flow": "n"|"s"|"e"|"w" }`
 
 `routes.taps` (connection-box taps):
 - `{ "cb": "xNyM", "side": "n"|"s"|"e"|"w", "track": <t>, "pin": <p> }`
+
+### IO Placement (v0)
+- `io.in` / `io.out` list IO port locations on the fabric edge.
+- Each entry: `{ "name": <port>, "x": <col>, "y": <row>, "side": "n"|"s"|"e"|"w" }`.
+
+### Router Notes (v0)
+- Initial router is Manhattan-only (A* on the CLB grid) with a fixed track per flow direction.
+- For `routing_dir=uni`, A* only expands moves that have available track capacity in `track_dirs`.
+- CB taps are emitted at both source and sink pins for visibility.
+- Switches are emitted at L-bends only.
+- Ports are placed on all four sides in round-robin order.
+- Routing segments can be `uni` or `bi` via `routing_dir`. For `uni`, direction is encoded in `flow`.
 
 ## Simulation Expectations
 - Combinational logic evaluated in topological order each tick.

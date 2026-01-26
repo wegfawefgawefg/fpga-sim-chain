@@ -2,15 +2,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from .layout import (
-    TRACKS,
-    cb_size,
-    clb_size,
-    lattice_dims,
-    node_center,
-    sb_size,
-    track_offsets,
-)
+from .layout import cb_size, clb_size, lattice_dims, node_center, sb_size, track_offsets
 
 Side = str
 Connection = tuple[Side, int, Side, int]
@@ -25,27 +17,32 @@ def draw_tracks(
     grid_h: int,
     font=None,
     show_labels: bool = False,
+    tracks: int = 4,
+    track_dirs: dict[str, int] | None = None,
+    routing_dir: str = "bi",
 ) -> None:
     import pygame
 
     x0, y0 = origin
     lattice_w, lattice_h = lattice_dims(grid_w, grid_h)
     line_color = (62, 66, 72)
-    offsets = track_offsets(cell)
+    offsets_h = track_offsets(cell, tracks, track_dirs, "h", routing_dir)
+    offsets_v = track_offsets(cell, tracks, track_dirs, "v", routing_dir)
 
     for row in range(0, lattice_h, 2):
         for col in range(0, lattice_w - 2, 2):
             sx, sy = node_center(origin, cell, col, row)
             ex, _ = node_center(origin, cell, col + 2, row)
             sb_half = sb_size(cell) // 2
-            for off in offsets:
+            for off in offsets_h:
                 y = sy + off
                 pygame.draw.line(surface, line_color, (sx + sb_half, y), (ex - sb_half, y), 1)
         if show_labels and font:
             sx, sy = node_center(origin, cell, 0, row)
             sb_half = sb_size(cell) // 2
-            for idx, off in enumerate(offsets):
-                text = font.render(f"T{idx}", True, (110, 110, 120))
+            for idx, off in enumerate(offsets_h):
+                label = _lane_label(idx, "h", track_dirs, routing_dir)
+                text = font.render(label, True, (110, 110, 120))
                 surface.blit(text, (sx - sb_half - text.get_width() - 4, sy + off - text.get_height() // 2))
 
     for col in range(0, lattice_w, 2):
@@ -53,14 +50,15 @@ def draw_tracks(
             sx, sy = node_center(origin, cell, col, row)
             _, ey = node_center(origin, cell, col, row + 2)
             sb_half = sb_size(cell) // 2
-            for off in offsets:
+            for off in offsets_v:
                 x = sx + off
                 pygame.draw.line(surface, line_color, (x, sy + sb_half), (x, ey - sb_half), 1)
         if show_labels and font:
             sx, sy = node_center(origin, cell, col, 0)
             sb_half = sb_size(cell) // 2
-            for idx, off in enumerate(offsets):
-                text = font.render(f"T{idx}", True, (110, 110, 120))
+            for idx, off in enumerate(offsets_v):
+                label = _lane_label(idx, "v", track_dirs, routing_dir)
+                text = font.render(label, True, (110, 110, 120))
                 surface.blit(text, (sx + off - text.get_width() // 2, sy - sb_half - text.get_height() - 2))
 
 
@@ -72,6 +70,9 @@ def draw_switch_boxes(
     grid_h: int,
     font,
     show_labels: bool = True,
+    tracks: int = 4,
+    track_dirs: dict[str, int] | None = None,
+    routing_dir: str = "bi",
     connections_for: Callable[[int, int], list[Connection]] | None = None,
 ) -> None:
     import pygame
@@ -88,13 +89,17 @@ def draw_switch_boxes(
             if show_labels:
                 label = font.render(f"sb x{col//2}y{row//2}", True, (120, 120, 130))
                 surface.blit(label, (cx - size // 2 + 1, cy - size // 2 - 10))
-            _draw_box_tracks(surface, (cx, cy), size, cell, (72, 78, 86))
-            _draw_wilton(surface, (cx, cy), size, cell, (72, 78, 86))
+            offsets_h = track_offsets(cell, tracks, track_dirs, "h", routing_dir)
+            offsets_v = track_offsets(cell, tracks, track_dirs, "v", routing_dir)
+            _draw_box_tracks(surface, (cx, cy), size, offsets_h, offsets_v, (72, 78, 86))
+            _draw_wilton(surface, (cx, cy), size, offsets_h, offsets_v, (72, 78, 86))
             if connections_for:
                 _draw_connections(
                     surface,
                     (cx, cy),
                     size,
+                    offsets_h,
+                    offsets_v,
                     cell,
                     connections_for(col, row),
                 )
@@ -109,12 +114,17 @@ def draw_connection_boxes(
     font,
     pins_per_side: int,
     show_labels: bool = True,
+    tracks: int = 4,
+    track_dirs: dict[str, int] | None = None,
+    routing_dir: str = "bi",
     taps_for: Callable[[int, int, Side], list[Tap]] | None = None,
 ) -> None:
     import pygame
 
     size = cb_size(cell)
     color = (90, 96, 106)
+    offsets_h = track_offsets(cell, tracks, track_dirs, "h", routing_dir)
+    offsets_v = track_offsets(cell, tracks, track_dirs, "v", routing_dir)
     for y in range(grid_h):
         for x in range(grid_w):
             row = 2 * y + 1
@@ -143,7 +153,7 @@ def draw_connection_boxes(
                     label = font.render(f"cb x{x}y{y}.{side}", True, (120, 120, 130))
                     lx, ly = _cb_label_pos(rect, label, side)
                     surface.blit(label, (lx, ly))
-                _draw_cb_tracks(surface, (px, py), size, cell, side, (72, 78, 86))
+                _draw_cb_tracks(surface, (px, py), size, cell, side, offsets_h, offsets_v, (72, 78, 86))
                 if taps_for:
                     _draw_cb_taps(
                         surface,
@@ -154,6 +164,8 @@ def draw_connection_boxes(
                         (cx, cy),
                         side,
                         pins_per_side,
+                        offsets_h,
+                        offsets_v,
                     )
 
 
@@ -173,7 +185,10 @@ def draw_clbs(
     lut_tables: dict[tuple[int, int, int], list[int]] | None = None,
     rng=None,
     omux_maps: dict[tuple[int, int], list[tuple[str, int, bool]]] | None = None,
+    imux_maps: dict[tuple[int, int], list[list[str]]] | None = None,
+    ff_state: dict[tuple[int, int, int], dict[str, int]] | None = None,
     inputs: list[int] | None = None,
+    clb_config: dict | None = None,
 ) -> None:
     import pygame
 
@@ -223,7 +238,10 @@ def draw_clbs(
                     lut_tables,
                     rng,
                     omux_maps,
+                    imux_maps,
+                    ff_state,
                     inputs,
+                    clb_config,
                 )
 
 
@@ -234,6 +252,38 @@ def draw_route_polyline(
 
     for idx in range(len(points) - 1):
         _draw_manhattan(surface, points[idx], points[idx + 1], color)
+
+
+def draw_route_arrow(
+    surface,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    flow: str | None,
+    color: tuple[int, int, int],
+) -> None:
+    import pygame
+    import math
+
+    if flow not in {"n", "s", "e", "w"}:
+        return
+    sx, sy = start
+    ex, ey = end
+    if flow in {"w", "n"}:
+        sx, sy, ex, ey = ex, ey, sx, sy
+    mx = (sx + ex) / 2
+    my = (sy + ey) / 2
+    dx = ex - sx
+    dy = ey - sy
+    length = math.hypot(dx, dy)
+    if length <= 0.1:
+        return
+    ux, uy = dx / length, dy / length
+    size = 6
+    px, py = -uy, ux
+    tip = (mx + ux * size, my + uy * size)
+    left = (mx - ux * size + px * size * 0.6, my - uy * size + py * size * 0.6)
+    right = (mx - ux * size - px * size * 0.6, my - uy * size - py * size * 0.6)
+    pygame.draw.polygon(surface, color, [tip, left, right])
 
 
 def _draw_manhattan(
@@ -249,20 +299,67 @@ def _draw_manhattan(
     pygame.draw.rect(surface, color, (mid[0] - 2, mid[1] - 2, 4, 4))
 
 
+def _draw_alpha_line(
+    surface,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    color: tuple[int, int, int],
+    alpha: int = 140,
+    width: int = 1,
+) -> None:
+    import pygame
+
+    x0 = min(start[0], end[0]) - width
+    y0 = min(start[1], end[1]) - width
+    x1 = max(start[0], end[0]) + width
+    y1 = max(start[1], end[1]) + width
+    w = max(1, x1 - x0)
+    h = max(1, y1 - y0)
+    tmp = pygame.Surface((w, h), pygame.SRCALPHA)
+    pygame.draw.line(
+        tmp,
+        (color[0], color[1], color[2], alpha),
+        (start[0] - x0, start[1] - y0),
+        (end[0] - x0, end[1] - y0),
+        width,
+    )
+    surface.blit(tmp, (x0, y0))
+
+
+def _draw_alpha_circle(
+    surface,
+    center: tuple[int, int],
+    radius: int,
+    color: tuple[int, int, int],
+    alpha: int = 140,
+) -> None:
+    import pygame
+
+    x0 = center[0] - radius - 1
+    y0 = center[1] - radius - 1
+    size = radius * 2 + 2
+    tmp = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.circle(
+        tmp, (color[0], color[1], color[2], alpha), (radius + 1, radius + 1), radius
+    )
+    surface.blit(tmp, (x0, y0))
+
+
 def _draw_box_tracks(
     surface,
     center: tuple[int, int],
     size: int,
-    cell: int,
+    offsets_h: list[int],
+    offsets_v: list[int],
     color: tuple[int, int, int],
 ) -> None:
     import pygame
 
     cx, cy = center
     half = size // 2
-    offsets = track_offsets(cell)
-    for off in offsets:
+    for off in offsets_h:
         pygame.draw.line(surface, color, (cx - half, cy + off), (cx + half, cy + off), 1)
+    for off in offsets_v:
         pygame.draw.line(surface, color, (cx + off, cy - half), (cx + off, cy + half), 1)
 
 
@@ -270,6 +367,8 @@ def _draw_connections(
     surface,
     center: tuple[int, int],
     size: int,
+    offsets_h: list[int],
+    offsets_v: list[int],
     cell: int,
     connections: list[Connection],
 ) -> None:
@@ -277,16 +376,21 @@ def _draw_connections(
 
     if not connections:
         return
-    offsets = track_offsets(cell)
     white = (235, 235, 235)
     for side_a, idx_a, side_b, idx_b in connections:
-        pa = _box_track_point(center, size, offsets, side_a, idx_a)
-        pb = _box_track_point(center, size, offsets, side_b, idx_b)
+        offsets_a = _offsets_for_side(side_a, offsets_h, offsets_v)
+        offsets_b = _offsets_for_side(side_b, offsets_h, offsets_v)
+        pa = _box_track_point(center, size, offsets_a, side_a, idx_a)
+        pb = _box_track_point(center, size, offsets_b, side_b, idx_b)
         if pa is None or pb is None:
             continue
         pygame.draw.line(surface, white, pa, pb, 1)
-        _draw_sb_channel_stubs(surface, center, size, cell, offsets, side_a, idx_a, white)
-        _draw_sb_channel_stubs(surface, center, size, cell, offsets, side_b, idx_b, white)
+        _draw_sb_channel_stubs(
+            surface, center, size, offsets_h, offsets_v, cell, side_a, idx_a, white
+        )
+        _draw_sb_channel_stubs(
+            surface, center, size, offsets_h, offsets_v, cell, side_b, idx_b, white
+        )
 
 
 def _box_track_point(
@@ -320,12 +424,14 @@ def _draw_cb_taps(
     clb_center: tuple[int, int],
     side: Side,
     pins_per_side: int,
+    offsets_h: list[int],
+    offsets_v: list[int],
 ) -> None:
     import pygame
 
     if not taps:
         return
-    track_offs = track_offsets(cell)
+    track_offs = _offsets_for_side(side, offsets_h, offsets_v)
     pin_offs = _pin_offsets_for_side(clb_size(cell), pins_per_side, side)
     white = (235, 235, 235)
     cx, cy = center
@@ -383,8 +489,9 @@ def _draw_sb_channel_stubs(
     surface,
     center: tuple[int, int],
     size: int,
+    offsets_h: list[int],
+    offsets_v: list[int],
     cell: int,
-    offsets: list[int],
     side: Side,
     track: int,
     color: tuple[int, int, int],
@@ -394,6 +501,7 @@ def _draw_sb_channel_stubs(
     cx, cy = center
     half = size // 2
     gap = _neighbor_gap(cell, size)
+    offsets = _offsets_for_side(side, offsets_h, offsets_v)
     idx = min(max(track, 0), len(offsets) - 1)
     off = offsets[idx]
     if side == "n":
@@ -408,6 +516,10 @@ def _draw_sb_channel_stubs(
 
 def _neighbor_gap(cell: int, size: int) -> int:
     return max(2, (cell - size) // 2)
+
+
+def _neighbor_gap_from_size(size: int) -> int:
+    return max(2, size // 6)
 
 
 def _cb_side(col: int, row: int, cb_col: int, cb_row: int) -> Side:
@@ -479,16 +591,16 @@ def _draw_clb_pin_labels(
     cy = y + h // 2
     label_color = (140, 140, 150)
     for idx, off in enumerate(pin_offs_w):
-        text = font.render(f"I{idx}", True, label_color)
+        text = font.render(f"W{idx}", True, label_color)
         surface.blit(text, (x - 18, cy + off - text.get_height() // 2))
     for idx, off in enumerate(pin_offs_e):
-        text = font.render(f"O{idx}", True, label_color)
+        text = font.render(f"E{idx}", True, label_color)
         surface.blit(text, (x + w + 4, cy + off - text.get_height() // 2))
     for idx, off in enumerate(pin_offs_n):
-        text = font.render(f"I{idx}", True, label_color)
+        text = font.render(f"N{idx}", True, label_color)
         surface.blit(text, (cx + off - text.get_width() // 2, y - text.get_height() - 2))
     for idx, off in enumerate(pin_offs_s):
-        text = font.render(f"O{idx}", True, label_color)
+        text = font.render(f"S{idx}", True, label_color)
         surface.blit(text, (cx + off - text.get_width() // 2, y + h + 2))
 
 
@@ -528,7 +640,10 @@ def _draw_clb_internals(
     lut_tables: dict[tuple[int, int, int], list[int]] | None,
     rng,
     omux_maps: dict[tuple[int, int], list[tuple[str, int, bool]]] | None,
+    imux_maps: dict[tuple[int, int], list[list[str]]] | None,
+    ff_state: dict[tuple[int, int, int], dict[str, int]] | None,
     inputs: list[int] | None,
+    clb_config: dict | None,
 ) -> None:
     import pygame
     import math
@@ -539,71 +654,19 @@ def _draw_clb_internals(
     slice_count = max(1, slices_per_clb)
     cols = max(1, int(math.ceil(math.sqrt(slice_count))))
     rows = max(1, int(math.ceil(slice_count / cols)))
-    # Input crossbar (shared) on the left side of the CLB interior.
-    xbar_w = max(8, int(w * 0.08))
-    in_xbar_rect = (int(inner[0]), int(inner[1]), xbar_w, int(inner[3]))
-    pygame.draw.rect(surface, (70, 78, 88), in_xbar_rect, 1)
-    in_xbar_label = font.render("IMUX", True, (140, 140, 150))
-    surface.blit(in_xbar_label, (in_xbar_rect[0] + 2, in_xbar_rect[1] + 2))
-
-    # Output crossbar (shared) on the right side of the CLB interior.
-    out_xbar_rect = (
-        int(inner[0] + inner[2] - xbar_w),
-        int(inner[1]),
-        xbar_w,
-        int(inner[3]),
-    )
-    pygame.draw.rect(surface, (70, 78, 88), out_xbar_rect, 1)
-    xbar_label = font.render("OMUX", True, (140, 140, 150))
-    surface.blit(xbar_label, (out_xbar_rect[0] + 2, out_xbar_rect[1] + 2))
-
-    # CLB pin stubs into IMUX/OMUX with simple direct lines.
-    pin_color = (100, 100, 110)
-    in_taps = _xbar_tap_positions(in_xbar_rect, pin_offs_w, pin_offs_n)
-    for py in pin_offs_w:
-        y_world = int(y + h // 2 + py)
-        tap = in_taps.get(("w", py))
-        if tap:
-            tx, ty = tap
-            pygame.draw.line(surface, pin_color, (x, y_world), (tx, ty), 1)
-    for px_off in pin_offs_n:
-        x_world = int(x + w // 2 + px_off)
-        idx = pin_offs_n.index(px_off) if pin_offs_n else 0
-        tx = int(in_xbar_rect[0] + (idx + 1) * in_xbar_rect[2] / (len(pin_offs_n) + 1))
-        pygame.draw.line(surface, pin_color, (x_world, y), (tx, in_xbar_rect[1]), 1)
-
-    omux_right = out_xbar_rect[0] + out_xbar_rect[2]
-    omux_bottom = out_xbar_rect[1] + out_xbar_rect[3]
+    # Direct output taps at CLB edge pins.
     omux_e_taps: dict[int, tuple[int, int]] = {}
     if pin_offs_e:
         for idx, _off in enumerate(pin_offs_e):
-            ty = int(out_xbar_rect[1] + (idx + 1) * out_xbar_rect[3] / (len(pin_offs_e) + 1))
-            omux_e_taps[idx] = (omux_right, ty)
+            ty = int(y + h // 2 + pin_offs_e[idx])
+            omux_e_taps[idx] = (x + w, ty)
     omux_s_taps: dict[int, tuple[int, int]] = {}
     if pin_offs_s:
         for idx, _off in enumerate(pin_offs_s):
-            tx = int(out_xbar_rect[0] + (idx + 1) * out_xbar_rect[2] / (len(pin_offs_s) + 1))
-            omux_s_taps[idx] = (tx, omux_bottom)
-    for idx, py in enumerate(pin_offs_e):
-        y_world = int(y + h // 2 + py)
-        tap = omux_e_taps.get(idx)
-        if tap:
-            tx, ty = tap
-            pygame.draw.line(surface, pin_color, (x + w, y_world), (tx, ty), 1)
-    for idx, px_off in enumerate(pin_offs_s):
-        x_world = int(x + w // 2 + px_off)
-        tap = omux_s_taps.get(idx)
-        if tap:
-            tx, ty = tap
-            pygame.draw.line(surface, pin_color, (x_world, y + h), (tx, ty), 1)
+            tx = int(x + w // 2 + pin_offs_s[idx])
+            omux_s_taps[idx] = (tx, y + h)
 
-    xbar_gap = max(2, int(w * 0.008))
-    slice_area = (
-        in_xbar_rect[0] + in_xbar_rect[2] + xbar_gap,
-        inner[1],
-        inner[2] - (in_xbar_rect[2] + out_xbar_rect[2]) - xbar_gap * 2,
-        inner[3],
-    )
+    slice_area = inner
     slice_area_rect = (
         int(slice_area[0]),
         int(slice_area[1]),
@@ -625,12 +688,32 @@ def _draw_clb_internals(
     for i, bit in enumerate(input_bits):
         active_idx |= (bit & 1) << i
 
-    if omux_maps is not None and rng is not None:
+    clb_key = f"x{clb_xy[0]}y{clb_xy[1]}"
+    clb_slices = clb_config.get(clb_key, {}).get("slices") if clb_config else None
+    if clb_slices:
+        slice_outputs = [None] * slice_count
+        slice_inputs = [[] for _ in range(slice_count)]
+        slice_tables = [None] * slice_count
+        for entry in clb_slices:
+            sidx = int(entry.get("index", 0))
+            if sidx < 0 or sidx >= slice_count:
+                continue
+            out = entry.get("output", {})
+            slice_outputs[sidx] = (
+                out.get("side", "e"),
+                int(out.get("pin", 0)),
+                bool(out.get("use_ff", False)),
+            )
+            slice_inputs[sidx] = entry.get("inputs", [])
+            slice_tables[sidx] = entry.get("table")
+    elif omux_maps is not None and rng is not None:
         omux_key = (clb_xy[0], clb_xy[1])
         if omux_key not in omux_maps:
             outputs: list[tuple[str, int]] = []
             outputs += [("e", idx) for idx in range(len(pin_offs_e))]
             outputs += [("s", idx) for idx in range(len(pin_offs_s))]
+            outputs += [("w", idx) for idx in range(len(pin_offs_w))]
+            outputs += [("n", idx) for idx in range(len(pin_offs_n))]
             rng.shuffle(outputs)
             mapped: list[tuple[str, int, bool]] = []
             for out in outputs[:slice_count]:
@@ -639,7 +722,28 @@ def _draw_clb_internals(
         slice_outputs = omux_maps[omux_key]
     else:
         slice_outputs = [("e", idx, True) for idx in range(min(slice_count, len(pin_offs_e)))]
-    bottom_bus_y = min(int(y + h - 4), int(slice_area[1] + slice_area[3] + 4))
+
+    if clb_slices:
+        pass
+    elif imux_maps is not None and rng is not None:
+        imux_key = (clb_xy[0], clb_xy[1])
+        if imux_key not in imux_maps:
+            sources: list[str] = []
+            sources += [f"W{i}" for i in range(len(pin_offs_w))]
+            sources += [f"N{i}" for i in range(len(pin_offs_n))]
+            sources += [f"E{i}" for i in range(len(pin_offs_e))]
+            sources += [f"S{i}" for i in range(len(pin_offs_s))]
+            mapped_inputs: list[list[str]] = []
+            for _ in range(slice_count):
+                if sources:
+                    picks = [sources[rng.randint(0, len(sources) - 1)] for _ in range(lut_inputs)]
+                else:
+                    picks = [f"I{i}" for i in range(lut_inputs)]
+                mapped_inputs.append(picks)
+            imux_maps[imux_key] = mapped_inputs
+        slice_inputs = imux_maps[imux_key]
+    else:
+        slice_inputs = [[f"I{i}" for i in range(lut_inputs)] for _ in range(slice_count)]
 
     for idx in range(slice_count):
         r = idx // cols
@@ -653,17 +757,13 @@ def _draw_clb_internals(
         slice_label = font.render(f"S{idx}", True, (140, 140, 150))
         surface.blit(slice_label, (slice_rect[0] + 2, slice_rect[1] + 2))
         inner_pad = max(2, int(min(sw, sh) * 0.04))
-        lut_w = int(sw * 0.64)
-        ff_w = int(sw * 0.12)
+        lut_w = int(sw * 0.72)
+        ff_w = int(sw * 0.14)
         box_h = int(sh - inner_pad * 2)
-        imux_w = max(6, int(sw * 0.12))
-        imux_x = int(sx + inner_pad)
-        imux_rect = (imux_x, int(sy + inner_pad + sh * 0.2), imux_w, int(sh * 0.6 - inner_pad))
-        imux_gap = max(2, int(sw * 0.03))
         lut_rect = (
-            int(imux_rect[0] + imux_w + imux_gap),
+            int(sx + inner_pad),
             int(sy + inner_pad),
-            int(lut_w - imux_gap - inner_pad),
+            int(lut_w),
             box_h,
         )
         ff_h = ff_w
@@ -679,40 +779,100 @@ def _draw_clb_internals(
             min(lut_rect[2], ff_rect[0] - lut_rect[0] - inner_pad),
             lut_rect[3],
         )
-        mid_y = int(sy + box_h // 2)
+        lut_in_taps: list[tuple[int, int]] = []
+        lut_header_h = 12
+        col_header_h = 12
+        table_y = lut_rect[1] + lut_header_h + col_header_h + 3
+        col_w = lut_rect[2] / (lut_inputs + 1)
+        for i in range(lut_inputs):
+            tx = int(lut_rect[0] + col_w * (i + 0.5))
+            lut_in_taps.append((tx, table_y))
 
         pygame.draw.rect(surface, (70, 78, 88), lut_rect, 1)
         pygame.draw.rect(surface, (70, 78, 88), ff_rect, 1)
-        pygame.draw.rect(surface, (70, 78, 88), imux_rect, 1)
         lut_label = font.render("LUT", True, (160, 160, 170))
         ff_label = font.render("FF", True, (160, 160, 170))
-        imux_label = font.render("IM", True, (160, 160, 170))
         surface.blit(lut_label, (lut_rect[0] + 2, lut_rect[1] + 2))
         surface.blit(ff_label, (ff_rect[0] + 2, ff_rect[1] + 2))
-        surface.blit(imux_label, (imux_rect[0] + 1, imux_rect[1] + 2))
+        label_x = slice_rect[0] + slice_rect[2] - 2
+        label_y = slice_rect[1] + 4
+        lines: list[str] = []
+        if idx < len(slice_outputs) and slice_outputs[idx]:
+            side, pin_idx, use_ff = slice_outputs[idx]
+            mode_tag = "F" if use_ff else "L"
+            lines.append(f"O:{side}{pin_idx}{mode_tag}")
+        if idx < len(slice_inputs):
+            for in_idx, src in enumerate(slice_inputs[idx][:lut_inputs]):
+                lines.append(f"I{in_idx}:{src}")
+        for line in lines:
+            text = font.render(line, True, (130, 130, 140))
+            surface.blit(text, (label_x - text.get_width(), label_y))
+            label_y += text.get_height() + 1
 
-        table_key = (clb_xy[0], clb_xy[1], idx)
-        if lut_tables is not None and rng is not None:
-            table = lut_tables.get(table_key)
-            if table is None:
-                table = [rng.randint(0, 1) for _ in range(rows)]
-                lut_tables[table_key] = table
-        else:
+        input_line_color = (120, 130, 150)
+        for in_idx, src in enumerate(slice_inputs[idx][:lut_inputs]):
+            if in_idx >= len(lut_in_taps):
+                continue
+            tx, ty = lut_in_taps[in_idx]
+            src_pt = None
+            if src.startswith("W"):
+                pidx = int(src[1:])
+                if pidx < len(pin_offs_w):
+                    src_pt = (x, int(y + h // 2 + pin_offs_w[pidx]))
+            elif src.startswith("E"):
+                pidx = int(src[1:])
+                if pidx < len(pin_offs_e):
+                    src_pt = (x + w, int(y + h // 2 + pin_offs_e[pidx]))
+            elif src.startswith("N"):
+                pidx = int(src[1:])
+                if pidx < len(pin_offs_n):
+                    src_pt = (int(x + w // 2 + pin_offs_n[pidx]), y)
+            elif src.startswith("S"):
+                pidx = int(src[1:])
+                if pidx < len(pin_offs_s):
+                    src_pt = (int(x + w // 2 + pin_offs_s[pidx]), y + h)
+            if src_pt:
+                _draw_alpha_line(surface, src_pt, (tx, ty), input_line_color, 90)
+
+        if clb_slices:
             table = None
+            if idx < len(slice_tables):
+                table = slice_tables[idx]
+        else:
+            table_key = (clb_xy[0], clb_xy[1], idx)
+            if lut_tables is not None and rng is not None:
+                table = lut_tables.get(table_key)
+                if table is None:
+                    table = [rng.randint(0, 1) for _ in range(rows)]
+                    lut_tables[table_key] = table
+            else:
+                table = None
 
         # Slice-local wiring omitted for clarity.
-        if idx < len(slice_outputs):
+        if idx < len(slice_outputs) and slice_outputs[idx]:
             side, pin_idx, use_ff = slice_outputs[idx]
+            tap = None
             if side == "e" and pin_idx < len(pin_offs_e):
                 tap = omux_e_taps.get(pin_idx)
             elif side == "s" and pin_idx < len(pin_offs_s):
                 tap = omux_s_taps.get(pin_idx)
-            else:
-                tap = None
+            elif side == "w" and pin_idx < len(pin_offs_w):
+                ty = int(y + h // 2 + pin_offs_w[pin_idx])
+                tap = (x, ty)
+            elif side == "n" and pin_idx < len(pin_offs_n):
+                tx = int(x + w // 2 + pin_offs_n[pin_idx])
+                tap = (tx, y)
             if tap:
                 tx, ty = tap
                 out_val = table[active_idx] if table is not None else 0
+                display_val = out_val
                 if use_ff:
+                    ff_key = (clb_xy[0], clb_xy[1], idx)
+                    if ff_state is not None:
+                        state = ff_state.get(ff_key, {"val": 0, "tick": -1})
+                        display_val = state.get("val", 0)
+                        if state.get("tick") != tick:
+                            ff_state[ff_key] = {"val": out_val, "tick": tick}
                     out_x = ff_rect[0] + ff_rect[2]
                     out_y = ff_rect[1] + ff_rect[3] // 2
                     pygame.draw.rect(
@@ -722,16 +882,79 @@ def _draw_clb_internals(
                         0,
                     )
                     pygame.draw.rect(surface, (90, 96, 106), ff_rect, 1)
+                    ff_text = font.render(str(display_val), True, (210, 210, 220))
+                    surface.blit(
+                        ff_text,
+                        (
+                            ff_rect[0] + (ff_rect[2] - ff_text.get_width()) // 2,
+                            ff_rect[1] + (ff_rect[3] - ff_text.get_height()) // 2,
+                        ),
+                    )
                 else:
                     out_x = lut_rect[0] + lut_rect[2]
                     out_y = lut_rect[1] + lut_rect[3] // 2
-                wire_color = (180, 220, 120) if out_val == 1 else (110, 110, 120)
-                pygame.draw.line(surface, wire_color, (out_x, out_y), (tx, ty), 1)
-                pygame.draw.circle(surface, wire_color, (tx, ty), 2)
+                wire_color = (180, 220, 120) if display_val == 1 else (110, 110, 120)
+                _draw_alpha_line(surface, (out_x, out_y), (tx, ty), wire_color, 130)
+                _draw_alpha_circle(surface, (tx, ty), 2, wire_color, 160)
 
         _draw_lut_table(surface, lut_rect, font, lut_inputs, active_idx, table)
 
     # Output pins are drawn via OMUX routing above.
+
+
+def draw_io_pads(
+    surface,
+    origin: tuple[int, int],
+    cell: int,
+    grid_w: int,
+    grid_h: int,
+    io: dict,
+    font,
+) -> None:
+    import pygame
+
+    if not io:
+        return
+    pads = []
+    pads += [(entry, "in") for entry in io.get("in", [])]
+    pads += [(entry, "out") for entry in io.get("out", [])]
+    pad_color = (90, 96, 106)
+    in_color = (120, 160, 210)
+    out_color = (180, 140, 120)
+    lattice_w, lattice_h = lattice_dims(grid_w, grid_h)
+    fabric_w = lattice_w * cell
+    fabric_h = lattice_h * cell
+    x0, y0 = origin
+    edge_color = (90, 96, 106)
+    for entry, kind in pads:
+        x = int(entry.get("x", 0))
+        y = int(entry.get("y", 0))
+        side = entry.get("side", "w")
+        name = entry.get("name", "")
+        col = 2 * x + 1
+        row = 2 * y + 1
+        cx, cy = node_center(origin, cell, col, row)
+        offset = cell // 2 + 8
+        if side == "w":
+            px, py = x0 - offset, cy
+            edge_pt = (x0, cy)
+        elif side == "e":
+            px, py = x0 + fabric_w + offset, cy
+            edge_pt = (x0 + fabric_w, cy)
+        elif side == "n":
+            px, py = cx, y0 - offset
+            edge_pt = (cx, y0)
+        else:
+            px, py = cx, y0 + fabric_h + offset
+            edge_pt = (cx, y0 + fabric_h)
+        pygame.draw.line(surface, edge_color, (px, py), edge_pt, 1)
+        rect = (px - 4, py - 4, 8, 8)
+        pygame.draw.rect(surface, pad_color, rect, 1)
+        color = in_color if kind == "in" else out_color
+        pygame.draw.rect(surface, color, (rect[0] + 1, rect[1] + 1, rect[2] - 2, rect[3] - 2))
+        if name and font:
+            label = font.render(name, True, color)
+            surface.blit(label, (px + 6, py - label.get_height() // 2))
 
 
 def _draw_lut_table(
@@ -818,26 +1041,26 @@ def _draw_wilton(
     surface,
     center: tuple[int, int],
     size: int,
-    cell: int,
+    offsets_h: list[int],
+    offsets_v: list[int],
     color: tuple[int, int, int],
 ) -> None:
     import pygame
 
     cx, cy = center
     half = size // 2
-    offsets = track_offsets(cell)
-    tracks = len(offsets)
+    tracks = min(len(offsets_h), len(offsets_v))
     for idx in range(tracks):
         nxt = (idx + 1) % tracks
         prv = (idx - 1) % tracks
-        north = (cx + offsets[idx], cy - half)
-        south = (cx + offsets[idx], cy + half)
-        east = (cx + half, cy + offsets[idx])
-        west = (cx - half, cy + offsets[idx])
-        ne = (cx + half, cy + offsets[nxt])
-        es = (cx + offsets[nxt], cy + half)
-        sw = (cx - half, cy + offsets[prv])
-        wn = (cx + offsets[prv], cy - half)
+        north = (cx + offsets_h[idx], cy - half)
+        south = (cx + offsets_h[idx], cy + half)
+        east = (cx + half, cy + offsets_v[idx])
+        west = (cx - half, cy + offsets_v[idx])
+        ne = (cx + half, cy + offsets_v[nxt])
+        es = (cx + offsets_h[nxt], cy + half)
+        sw = (cx - half, cy + offsets_v[prv])
+        wn = (cx + offsets_h[prv], cy - half)
         pygame.draw.line(surface, color, north, ne, 1)
         pygame.draw.line(surface, color, east, es, 1)
         pygame.draw.line(surface, color, south, sw, 1)
@@ -909,6 +1132,8 @@ def _draw_cb_tracks(
     size: int,
     cell: int,
     side: Side,
+    offsets_h: list[int],
+    offsets_v: list[int],
     color: tuple[int, int, int],
 ) -> None:
     import pygame
@@ -916,16 +1141,34 @@ def _draw_cb_tracks(
     cx, cy = center
     half = size // 2
     cell_half = cell // 2
-    offsets = track_offsets(cell)
     if side in ("w", "e"):
-        for off in offsets:
+        for off in offsets_v:
             x = cx + off
             pygame.draw.line(surface, color, (x, cy - cell_half), (x, cy - half), 1)
             pygame.draw.line(surface, color, (x, cy - half), (x, cy + half), 1)
             pygame.draw.line(surface, color, (x, cy + half), (x, cy + cell_half), 1)
     else:
-        for off in offsets:
+        for off in offsets_h:
             y = cy + off
             pygame.draw.line(surface, color, (cx - cell_half, y), (cx - half, y), 1)
             pygame.draw.line(surface, color, (cx - half, y), (cx + half, y), 1)
             pygame.draw.line(surface, color, (cx + half, y), (cx + cell_half, y), 1)
+
+
+def _offsets_for_side(side: Side, offsets_h: list[int], offsets_v: list[int]) -> list[int]:
+    return offsets_h if side in ("n", "s") else offsets_v
+
+
+def _lane_label(idx: int, orientation: str, track_dirs: dict[str, int] | None, routing_dir: str) -> str:
+    if routing_dir != "uni":
+        return f"T{idx}"
+    dirs = track_dirs or {}
+    if orientation == "h":
+        e_count = int(dirs.get("e", 0))
+        if idx < e_count:
+            return f"E{idx}"
+        return f"W{idx - e_count}"
+    n_count = int(dirs.get("n", 0))
+    if idx < n_count:
+        return f"N{idx}"
+    return f"S{idx - n_count}"

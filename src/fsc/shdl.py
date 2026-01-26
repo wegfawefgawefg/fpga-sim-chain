@@ -40,14 +40,14 @@ def parse_shdl(text: str) -> ShdlModule:
     return ShdlModule(name=name, ports=ports, wires=wires, cells=cells)
 
 
-def to_fnet(mod: ShdlModule) -> dict:
+def to_fnet(mod: ShdlModule, fabric: dict | None = None) -> dict:
     nets = set(mod.wires)
     for pname in mod.ports.keys():
         nets.add(pname)
     for cell in mod.cells.values():
         for net in cell["pins"].values():
             nets.add(net)
-    return {
+    fnet = {
         "top": mod.name,
         "modules": {
             mod.name: {
@@ -57,6 +57,9 @@ def to_fnet(mod: ShdlModule) -> dict:
             }
         },
     }
+    if fabric:
+        fnet["fabric"] = fabric
+    return fnet
 
 
 def _parse_ports(items: Iterable[object], ports: dict[str, str]) -> None:
@@ -149,4 +152,3 @@ def _require_symbol(value: object, label: str) -> str:
 def _ensure_unique_cell(name: str, cells: dict[str, dict]) -> None:
     if name in cells:
         raise ValueError(f"Duplicate instance name: {name}")
-

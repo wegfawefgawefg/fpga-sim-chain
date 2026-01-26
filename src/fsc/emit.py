@@ -8,3 +8,7 @@ def write_fnet(fnet: dict, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(fnet, indent=2, sort_keys=True) + "\n")
 
+
+def write_fbit(fbit: dict, out_path: Path) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(fbit, indent=2, sort_keys=True) + "\n")
