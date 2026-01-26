@@ -169,6 +169,10 @@ def draw_clbs(
     show_internals: bool = False,
     slices_per_clb: int = 4,
     lut_k: int = 4,
+    tick: int = 0,
+    lut_tables: dict[tuple[int, int, int], list[int]] | None = None,
+    rng=None,
+    omux_maps: dict[tuple[int, int], list[tuple[str, int, bool]]] | None = None,
 ) -> None:
     import pygame
 
@@ -213,6 +217,11 @@ def draw_clbs(
                     pin_offs_e,
                     pin_offs_n,
                     pin_offs_s,
+                    (x, y),
+                    tick,
+                    lut_tables,
+                    rng,
+                    omux_maps,
                 )
 
 
@@ -512,18 +521,23 @@ def _draw_clb_internals(
     pin_offs_e: list[int],
     pin_offs_n: list[int],
     pin_offs_s: list[int],
+    clb_xy: tuple[int, int],
+    tick: int,
+    lut_tables: dict[tuple[int, int, int], list[int]] | None,
+    rng,
+    omux_maps: dict[tuple[int, int], list[tuple[str, int, bool]]] | None,
 ) -> None:
     import pygame
     import math
 
     x, y, w, h = rect
-    pad = max(3, w // 20)
+    pad = max(2, w // 30)
     inner = (x + pad, y + pad, w - pad * 2, h - pad * 2)
     slice_count = max(1, slices_per_clb)
     cols = max(1, int(math.ceil(math.sqrt(slice_count))))
     rows = max(1, int(math.ceil(slice_count / cols)))
     # Input crossbar (shared) on the left side of the CLB interior.
-    xbar_w = max(10, int(w * 0.12))
+    xbar_w = max(8, int(w * 0.08))
     in_xbar_rect = (int(inner[0]), int(inner[1]), xbar_w, int(inner[3]))
     pygame.draw.rect(surface, (70, 78, 88), in_xbar_rect, 1)
     in_xbar_label = font.render("IMUX", True, (140, 140, 150))
@@ -540,58 +554,47 @@ def _draw_clb_internals(
     xbar_label = font.render("OMUX", True, (140, 140, 150))
     surface.blit(xbar_label, (out_xbar_rect[0] + 2, out_xbar_rect[1] + 2))
 
-    # CLB pin stubs into IMUX/OMUX with per-track tap points.
+    # CLB pin stubs into IMUX/OMUX with simple direct lines.
     pin_color = (100, 100, 110)
     in_taps = _xbar_tap_positions(in_xbar_rect, pin_offs_w, pin_offs_n)
-    stagger_step = max(2, int(w * 0.01))
-    total_w = len(pin_offs_w)
-    for idx, py in enumerate(pin_offs_w):
+    for py in pin_offs_w:
         y_world = int(y + h // 2 + py)
-        entry_y = int(in_xbar_rect[1] + in_xbar_rect[3] * 0.75 + idx * 2)
-        entry_y = min(entry_y, in_xbar_rect[1] + in_xbar_rect[3] - 3)
-        jog_x = x + (total_w - idx) * stagger_step
-        pygame.draw.line(surface, pin_color, (x, y_world), (jog_x, y_world), 1)
-        pygame.draw.line(surface, pin_color, (jog_x, y_world), (jog_x, entry_y), 1)
-        pygame.draw.line(surface, pin_color, (jog_x, entry_y), (in_xbar_rect[0], entry_y), 1)
-    total_n = len(pin_offs_n)
-    for idx, px_off in enumerate(pin_offs_n):
-        x_world = int(x + w // 2 + px_off)
-        tap = in_taps.get(("n", px_off))
+        tap = in_taps.get(("w", py))
         if tap:
             tx, ty = tap
-            top_y = y
-            jog_y = y + (idx + 1) * stagger_step
-            entry_x = int(in_xbar_rect[0] + in_xbar_rect[2] * 0.25 + idx * 2)
-            entry_x = max(in_xbar_rect[0] + 2, min(entry_x, in_xbar_rect[0] + in_xbar_rect[2] - 2))
-            pygame.draw.line(surface, pin_color, (x_world, top_y), (x_world, jog_y), 1)
-            pygame.draw.line(surface, pin_color, (x_world, jog_y), (entry_x, jog_y), 1)
-            pygame.draw.line(surface, pin_color, (entry_x, jog_y), (entry_x, in_xbar_rect[1]), 1)
+            pygame.draw.line(surface, pin_color, (x, y_world), (tx, ty), 1)
+    for px_off in pin_offs_n:
+        x_world = int(x + w // 2 + px_off)
+        idx = pin_offs_n.index(px_off) if pin_offs_n else 0
+        tx = int(in_xbar_rect[0] + (idx + 1) * in_xbar_rect[2] / (len(pin_offs_n) + 1))
+        pygame.draw.line(surface, pin_color, (x_world, y), (tx, in_xbar_rect[1]), 1)
 
-    total_e = len(pin_offs_e)
+    omux_right = out_xbar_rect[0] + out_xbar_rect[2]
+    omux_bottom = out_xbar_rect[1] + out_xbar_rect[3]
+    omux_e_taps: dict[int, tuple[int, int]] = {}
+    if pin_offs_e:
+        for idx, _off in enumerate(pin_offs_e):
+            ty = int(out_xbar_rect[1] + (idx + 1) * out_xbar_rect[3] / (len(pin_offs_e) + 1))
+            omux_e_taps[idx] = (omux_right, ty)
+    omux_s_taps: dict[int, tuple[int, int]] = {}
+    if pin_offs_s:
+        for idx, _off in enumerate(pin_offs_s):
+            tx = int(out_xbar_rect[0] + (idx + 1) * out_xbar_rect[2] / (len(pin_offs_s) + 1))
+            omux_s_taps[idx] = (tx, omux_bottom)
     for idx, py in enumerate(pin_offs_e):
         y_world = int(y + h // 2 + py)
-        entry_y = int(out_xbar_rect[1] + out_xbar_rect[3] * 0.75 + idx * 2)
-        entry_y = min(entry_y, out_xbar_rect[1] + out_xbar_rect[3] - 3)
-        jog_x = x + w - (total_e - idx) * stagger_step
-        xbar_right = out_xbar_rect[0] + out_xbar_rect[2]
-        pygame.draw.line(surface, pin_color, (x + w, y_world), (jog_x, y_world), 1)
-        pygame.draw.line(surface, pin_color, (jog_x, y_world), (jog_x, entry_y), 1)
-        pygame.draw.line(surface, pin_color, (jog_x, entry_y), (xbar_right, entry_y), 1)
-    out_taps = _xbar_tap_positions(out_xbar_rect, pin_offs_e, pin_offs_s)
-    total_s = len(pin_offs_s)
+        tap = omux_e_taps.get(idx)
+        if tap:
+            tx, ty = tap
+            pygame.draw.line(surface, pin_color, (x + w, y_world), (tx, ty), 1)
     for idx, px_off in enumerate(pin_offs_s):
         x_world = int(x + w // 2 + px_off)
-        tap = out_taps.get(("s", px_off))
+        tap = omux_s_taps.get(idx)
         if tap:
-            omux_bottom = out_xbar_rect[1] + out_xbar_rect[3]
-            jog_y = y + h - (total_s - idx) * stagger_step
-            entry_x = int(out_xbar_rect[0] + out_xbar_rect[2] * 0.25 + idx * 2)
-            entry_x = max(out_xbar_rect[0] + 2, min(entry_x, out_xbar_rect[0] + out_xbar_rect[2] - 2))
-            pygame.draw.line(surface, pin_color, (x_world, y + h), (x_world, jog_y), 1)
-            pygame.draw.line(surface, pin_color, (x_world, jog_y), (entry_x, jog_y), 1)
-            pygame.draw.line(surface, pin_color, (entry_x, jog_y), (entry_x, omux_bottom), 1)
+            tx, ty = tap
+            pygame.draw.line(surface, pin_color, (x_world, y + h), (tx, ty), 1)
 
-    xbar_gap = max(4, int(w * 0.015))
+    xbar_gap = max(2, int(w * 0.008))
     slice_area = (
         in_xbar_rect[0] + in_xbar_rect[2] + xbar_gap,
         inner[1],
@@ -609,11 +612,25 @@ def _draw_clb_internals(
     surface.blit(slice_area_label, (slice_area_rect[0] + 2, slice_area_rect[1] + 2))
     slice_w = slice_area[2] / cols if cols else inner[2]
     slice_h = slice_area[3] / rows if rows else inner[3]
-    slice_pad = max(3, int(min(slice_w, slice_h) * 0.12))
-    lut_inputs = max(1, lut_k)
-    top_bus_y = int(slice_area[1] + 2)
-    bottom_bus_y = int(slice_area[1] + slice_area[3] - 2)
-    mid_bus_y = int(slice_area[1] + slice_area[3] * 0.5)
+    slice_pad = max(1, int(min(slice_w, slice_h) * 0.05))
+    lut_inputs = max(1, min(4, lut_k))
+    rows = 2 ** lut_inputs
+
+    if omux_maps is not None and rng is not None:
+        omux_key = (clb_xy[0], clb_xy[1])
+        if omux_key not in omux_maps:
+            outputs: list[tuple[str, int]] = []
+            outputs += [("e", idx) for idx in range(len(pin_offs_e))]
+            outputs += [("s", idx) for idx in range(len(pin_offs_s))]
+            rng.shuffle(outputs)
+            mapped: list[tuple[str, int, bool]] = []
+            for out in outputs[:slice_count]:
+                mapped.append((out[0], out[1], bool(rng.randint(0, 1))))
+            omux_maps[omux_key] = mapped
+        slice_outputs = omux_maps[omux_key]
+    else:
+        slice_outputs = [("e", idx, True) for idx in range(min(slice_count, len(pin_offs_e)))]
+    bottom_bus_y = min(int(y + h - 4), int(slice_area[1] + slice_area[3] + 4))
 
     for idx in range(slice_count):
         r = idx // cols
@@ -626,9 +643,9 @@ def _draw_clb_internals(
         pygame.draw.rect(surface, (62, 68, 78), slice_rect, 1)
         slice_label = font.render(f"S{idx}", True, (140, 140, 150))
         surface.blit(slice_label, (slice_rect[0] + 2, slice_rect[1] + 2))
-        inner_pad = max(2, int(min(sw, sh) * 0.06))
+        inner_pad = max(2, int(min(sw, sh) * 0.04))
         lut_w = int(sw * 0.64)
-        ff_w = int(sw * 0.18)
+        ff_w = int(sw * 0.12)
         box_h = int(sh - inner_pad * 2)
         imux_w = max(6, int(sw * 0.12))
         imux_x = int(sx + inner_pad)
@@ -640,7 +657,7 @@ def _draw_clb_internals(
             int(lut_w - imux_gap - inner_pad),
             box_h,
         )
-        ff_h = int(box_h * 0.5)
+        ff_h = ff_w
         ff_rect = (
             int(sx + sw - ff_w - inner_pad),
             int(sy + inner_pad + box_h - ff_h),
@@ -653,11 +670,7 @@ def _draw_clb_internals(
             min(lut_rect[2], ff_rect[0] - lut_rect[0] - inner_pad),
             lut_rect[3],
         )
-        mux_x = ff_rect[0] + ff_rect[2] + max(1, slice_pad // 2)
         mid_y = int(sy + box_h // 2)
-        imux_bus_y = top_bus_y if r == 0 else bottom_bus_y
-        ff_mid_y = int(ff_rect[1] + ff_rect[3] * 0.5)
-        pass_y = int(sy + box_h * 0.3)
 
         pygame.draw.rect(surface, (70, 78, 88), lut_rect, 1)
         pygame.draw.rect(surface, (70, 78, 88), ff_rect, 1)
@@ -669,60 +682,42 @@ def _draw_clb_internals(
         surface.blit(ff_label, (ff_rect[0] + 2, ff_rect[1] + 2))
         surface.blit(imux_label, (imux_rect[0] + 1, imux_rect[1] + 2))
 
-        lut_out_x = lut_rect[0] + lut_rect[2]
-        ff_in_x = ff_rect[0]
-        ff_out_x = ff_rect[0] + ff_rect[2]
-        # IMUX routing lanes go around slices (top/bottom bus), then drop into slice.
-        pygame.draw.line(
-            surface,
-            (100, 100, 110),
-            (in_xbar_rect[0] + in_xbar_rect[2], imux_bus_y),
-            (imux_rect[0], imux_bus_y),
-            1,
-        )
-        pygame.draw.line(surface, (100, 100, 110), (imux_rect[0], imux_bus_y), (imux_rect[0], mid_y), 1)
-        pygame.draw.line(
-            surface,
-            (120, 120, 130),
-            (imux_rect[0] + imux_rect[2], mid_y),
-            (lut_rect[0], mid_y),
-            1,
-        )
-        pygame.draw.line(surface, (120, 120, 130), (lut_out_x, ff_mid_y), (ff_in_x, ff_mid_y), 1)
-        pygame.draw.line(surface, (120, 120, 130), (ff_out_x, ff_mid_y), (mux_x, ff_mid_y), 1)
-        pygame.draw.line(surface, (120, 120, 130), (lut_out_x, pass_y), (mux_x, pass_y), 1)
+        # Slice-local wiring omitted for clarity.
+        if idx < len(slice_outputs):
+            side, pin_idx, use_ff = slice_outputs[idx]
+            if side == "e" and pin_idx < len(pin_offs_e):
+                tap = omux_e_taps.get(pin_idx)
+            elif side == "s" and pin_idx < len(pin_offs_s):
+                tap = omux_s_taps.get(pin_idx)
+            else:
+                tap = None
+            if tap:
+                tx, ty = tap
+                if use_ff:
+                    out_x = ff_rect[0] + ff_rect[2]
+                    out_y = ff_rect[1] + ff_rect[3] // 2
+                    pygame.draw.rect(
+                        surface,
+                        (70, 86, 110),
+                        ff_rect,
+                        0,
+                    )
+                    pygame.draw.rect(surface, (90, 96, 106), ff_rect, 1)
+                else:
+                    out_x = lut_rect[0] + lut_rect[2]
+                    out_y = lut_rect[1] + lut_rect[3] // 2
+                pygame.draw.line(surface, (110, 110, 120), (out_x, out_y), (tx, ty), 1)
 
-        mux_h = min(8, int(sh * 0.2))
-        mux_cy = int((ff_mid_y + pass_y) / 2)
-        mux_pts = [
-            (mux_x, mux_cy - mux_h),
-            (mux_x, mux_cy + mux_h),
-            (mux_x + mux_h, mux_cy),
-        ]
-        pygame.draw.polygon(surface, (120, 120, 130), mux_pts, 1)
-
-        # Converge both paths into the mux and a single output.
-        pygame.draw.line(surface, (120, 120, 130), (mux_x, pass_y), (mux_x, mux_cy), 1)
-        pygame.draw.line(surface, (120, 120, 130), (mux_x, ff_mid_y), (mux_x, mux_cy), 1)
-        lane_offset = (c * 2 - (cols - 1)) * 3
-        out_bus_y = max(slice_area_rect[1] + 4, min(mid_bus_y + lane_offset, slice_area_rect[1] + slice_area_rect[3] - 4))
-        pygame.draw.line(surface, (120, 120, 130), (mux_x + mux_h, mux_cy), (mux_x + mux_h + 4, mux_cy), 1)
-        pygame.draw.line(
-            surface,
-            (120, 120, 130),
-            (mux_x + mux_h + 4, mux_cy),
-            (mux_x + mux_h + 4, out_bus_y),
-            1,
-        )
-        pygame.draw.line(
-            surface,
-            (120, 120, 130),
-            (mux_x + mux_h + 4, out_bus_y),
-            (out_xbar_rect[0], out_bus_y),
-            1,
-        )
-
-        _draw_lut_table(surface, lut_rect, font, lut_inputs)
+        active_idx = (tick + idx) % rows
+        table_key = (clb_xy[0], clb_xy[1], idx)
+        if lut_tables is not None and rng is not None:
+            table = lut_tables.get(table_key)
+            if table is None:
+                table = [rng.randint(0, 1) for _ in range(rows)]
+                lut_tables[table_key] = table
+        else:
+            table = None
+        _draw_lut_table(surface, lut_rect, font, lut_inputs, active_idx, table)
 
     # Output pins are drawn via OMUX routing above.
 
@@ -732,6 +727,8 @@ def _draw_lut_table(
     rect: tuple[int, int, int, int],
     font,
     lut_inputs: int,
+    active_row: int | None = None,
+    table: list[int] | None = None,
 ) -> None:
     import pygame
 
@@ -740,41 +737,53 @@ def _draw_lut_table(
     cols = lut_inputs + 1  # inputs + output
     lut_header_h = 12
     col_header_h = 12
+    table_x = x
+    table_w = w
     table_y = y + lut_header_h + col_header_h + 3
-    table_h = h - lut_header_h - col_header_h - 5
+    table_h = h - lut_header_h - col_header_h - 3
     if rows <= 0 or table_h <= 4:
         return
 
     row_h = table_h / rows
-    col_w = w / cols
+    col_w = table_w / cols
     if row_h < 6 or col_w < 6:
         return
 
     grid_color = (80, 86, 96)
     for r in range(rows + 1):
         yy = int(table_y + r * row_h)
-        pygame.draw.line(surface, grid_color, (x + 2, yy), (x + w - 2, yy), 1)
+        pygame.draw.line(surface, grid_color, (table_x, yy), (table_x + table_w, yy), 1)
     for c in range(cols + 1):
-        xx = int(x + c * col_w)
+        xx = int(table_x + c * col_w)
         pygame.draw.line(surface, grid_color, (xx, table_y), (xx, table_y + table_h), 1)
 
     # Column header labels
     for c in range(lut_inputs):
         label = font.render(f"I{c}", True, (150, 150, 160))
-        surface.blit(label, (int(x + c * col_w + 3), y + lut_header_h + 2))
+        surface.blit(label, (int(table_x + c * col_w + 3), y + lut_header_h + 2))
     out_label = font.render("O", True, (150, 150, 160))
-    surface.blit(out_label, (int(x + lut_inputs * col_w + 3), y + lut_header_h + 2))
+    surface.blit(out_label, (int(table_x + lut_inputs * col_w + 3), y + lut_header_h + 2))
 
     # Truth table contents (default zeros)
     for r in range(rows):
         bits = format(r, f"0{lut_inputs}b")
+        if active_row is not None and r == active_row:
+            pygame.draw.rect(
+                surface,
+                (70, 86, 110),
+                (table_x, int(table_y + r * row_h), table_w, int(row_h) + 1),
+                0,
+            )
         for c in range(lut_inputs):
             val = font.render(bits[c], True, (140, 140, 150))
-            vx = int(x + c * col_w + col_w / 2 - val.get_width() / 2)
+            vx = int(table_x + c * col_w + col_w / 2 - val.get_width() / 2)
             vy = int(table_y + r * row_h + row_h / 2 - val.get_height() / 2)
             surface.blit(val, (vx, vy))
-        out = font.render("0", True, (140, 140, 150))
-        ox = int(x + lut_inputs * col_w + col_w / 2 - out.get_width() / 2)
+        out_val = "0"
+        if table is not None and r < len(table):
+            out_val = str(table[r])
+        out = font.render(out_val, True, (140, 140, 150))
+        ox = int(table_x + lut_inputs * col_w + col_w / 2 - out.get_width() / 2)
         oy = int(table_y + r * row_h + row_h / 2 - out.get_height() / 2)
         surface.blit(out, (ox, oy))
 

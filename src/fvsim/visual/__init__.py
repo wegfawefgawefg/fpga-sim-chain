@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import os
 import time
+import random
 
 from .draw import (
     Connection,
@@ -61,6 +62,10 @@ def run_visual(
     show_clb_internals = True
     running = True
     start_time = time.time()
+    tick = 0
+    rng = random.Random(0xC0DE)
+    lut_tables: dict[tuple[int, int, int], list[int]] = {}
+    omux_maps: dict[tuple[int, int], list[tuple[str, int, bool]]] = {}
     dragging = False
     last_mouse = (0, 0)
     while running:
@@ -107,6 +112,7 @@ def run_visual(
 
         cell = max(8, int(base_cell * zoom))
         origin_xy = (int(base_origin[0] + pan_x), int(base_origin[1] + pan_y))
+        tick = int((time.time() - start_time) * 2)
 
         surface.fill((18, 18, 20))
         _draw_grid(surface, origin_xy, cell, grid_w, grid_h)
@@ -148,6 +154,10 @@ def run_visual(
             show_clb_internals,
             slices_per_clb,
             lut_k,
+            tick,
+            lut_tables,
+            rng,
+            omux_maps,
         )
 
         if runtime and (time.time() - start_time) >= runtime:
