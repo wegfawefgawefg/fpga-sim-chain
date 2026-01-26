@@ -5,8 +5,8 @@ from typing import Callable
 from .layout import cb_size, clb_size, lattice_dims, node_center, sb_size, track_offsets
 
 Side = str
-Connection = tuple[Side, int, Side, int]
-Tap = tuple[Side, int, int]
+Connection = tuple[Side, int, Side, int] | tuple[Side, int, Side, int, str]
+Tap = tuple[Side, int, int] | tuple[Side, int, int, str]
 
 
 def draw_tracks(
@@ -377,19 +377,25 @@ def _draw_connections(
     if not connections:
         return
     white = (235, 235, 235)
-    for side_a, idx_a, side_b, idx_b in connections:
+    for conn in connections:
+        if len(conn) == 5:
+            side_a, idx_a, side_b, idx_b, net = conn
+            color = _net_color(net)
+        else:
+            side_a, idx_a, side_b, idx_b = conn
+            color = white
         offsets_a = _offsets_for_side(side_a, offsets_h, offsets_v)
         offsets_b = _offsets_for_side(side_b, offsets_h, offsets_v)
         pa = _box_track_point(center, size, offsets_a, side_a, idx_a)
         pb = _box_track_point(center, size, offsets_b, side_b, idx_b)
         if pa is None or pb is None:
             continue
-        pygame.draw.line(surface, white, pa, pb, 1)
+        pygame.draw.line(surface, color, pa, pb, 1)
         _draw_sb_channel_stubs(
-            surface, center, size, offsets_h, offsets_v, cell, side_a, idx_a, white
+            surface, center, size, offsets_h, offsets_v, cell, side_a, idx_a, color
         )
         _draw_sb_channel_stubs(
-            surface, center, size, offsets_h, offsets_v, cell, side_b, idx_b, white
+            surface, center, size, offsets_h, offsets_v, cell, side_b, idx_b, color
         )
 
 
@@ -439,7 +445,13 @@ def _draw_cb_taps(
     clb_half = clb_size(cell) // 2
     clb_x, clb_y = clb_center
 
-    for tap_side, track, pin in taps:
+    for tap in taps:
+        if len(tap) == 4:
+            tap_side, track, pin, net = tap
+            color = _net_color(net)
+        else:
+            tap_side, track, pin = tap
+            color = white
         if tap_side != side:
             continue
         tidx = min(max(track, 0), len(track_offs) - 1)
@@ -451,38 +463,38 @@ def _draw_cb_taps(
             iy = cy + pin_off
             cb_edge = (cx + cb_half, cy + pin_off)
             clb_edge = (clb_x - clb_half, clb_y + pin_off)
-            pygame.draw.line(surface, white, clb_edge, cb_edge, 1)
-            pygame.draw.line(surface, white, cb_edge, (ix, iy), 1)
-            pygame.draw.line(surface, white, (ix, cy - cb_half), (ix, cy + cb_half), 1)
-            _draw_cb_lane_extensions(surface, cx, cy, cb_half, cell // 2, "v", track_off, white)
+            pygame.draw.line(surface, color, clb_edge, cb_edge, 1)
+            pygame.draw.line(surface, color, cb_edge, (ix, iy), 1)
+            pygame.draw.line(surface, color, (ix, cy - cb_half), (ix, cy + cb_half), 1)
+            _draw_cb_lane_extensions(surface, cx, cy, cb_half, cell // 2, "v", track_off, color)
         elif side == "e":
             ix = cx + track_off
             iy = cy + pin_off
             cb_edge = (cx - cb_half, cy + pin_off)
             clb_edge = (clb_x + clb_half, clb_y + pin_off)
-            pygame.draw.line(surface, white, clb_edge, cb_edge, 1)
-            pygame.draw.line(surface, white, cb_edge, (ix, iy), 1)
-            pygame.draw.line(surface, white, (ix, cy - cb_half), (ix, cy + cb_half), 1)
-            _draw_cb_lane_extensions(surface, cx, cy, cb_half, cell // 2, "v", track_off, white)
+            pygame.draw.line(surface, color, clb_edge, cb_edge, 1)
+            pygame.draw.line(surface, color, cb_edge, (ix, iy), 1)
+            pygame.draw.line(surface, color, (ix, cy - cb_half), (ix, cy + cb_half), 1)
+            _draw_cb_lane_extensions(surface, cx, cy, cb_half, cell // 2, "v", track_off, color)
         elif side == "n":
             ix = cx + pin_off
             iy = cy + track_off
             cb_edge = (cx + pin_off, cy + cb_half)
             clb_edge = (clb_x + pin_off, clb_y - clb_half)
-            pygame.draw.line(surface, white, clb_edge, cb_edge, 1)
-            pygame.draw.line(surface, white, cb_edge, (ix, iy), 1)
-            pygame.draw.line(surface, white, (cx - cb_half, iy), (cx + cb_half, iy), 1)
-            _draw_cb_lane_extensions(surface, cx, cy, cb_half, cell // 2, "h", track_off, white)
+            pygame.draw.line(surface, color, clb_edge, cb_edge, 1)
+            pygame.draw.line(surface, color, cb_edge, (ix, iy), 1)
+            pygame.draw.line(surface, color, (cx - cb_half, iy), (cx + cb_half, iy), 1)
+            _draw_cb_lane_extensions(surface, cx, cy, cb_half, cell // 2, "h", track_off, color)
         else:
             ix = cx + pin_off
             iy = cy + track_off
             cb_edge = (cx + pin_off, cy - cb_half)
             clb_edge = (clb_x + pin_off, clb_y + clb_half)
-            pygame.draw.line(surface, white, clb_edge, cb_edge, 1)
-            pygame.draw.line(surface, white, cb_edge, (ix, iy), 1)
-            pygame.draw.line(surface, white, (cx - cb_half, iy), (cx + cb_half, iy), 1)
-            _draw_cb_lane_extensions(surface, cx, cy, cb_half, cell // 2, "h", track_off, white)
-        _draw_x(surface, (ix, iy), white)
+            pygame.draw.line(surface, color, clb_edge, cb_edge, 1)
+            pygame.draw.line(surface, color, cb_edge, (ix, iy), 1)
+            pygame.draw.line(surface, color, (cx - cb_half, iy), (cx + cb_half, iy), 1)
+            _draw_cb_lane_extensions(surface, cx, cy, cb_half, cell // 2, "h", track_off, color)
+        _draw_x(surface, (ix, iy), color)
 
 
 def _draw_sb_channel_stubs(
@@ -602,6 +614,35 @@ def _draw_clb_pin_labels(
     for idx, off in enumerate(pin_offs_s):
         text = font.render(f"S{idx}", True, label_color)
         surface.blit(text, (cx + off - text.get_width() // 2, y + h + 2))
+
+
+def _net_color(net: str) -> tuple[int, int, int]:
+    if not net:
+        return (200, 200, 200)
+    h = sum(ord(ch) for ch in net) % 360
+    return _hsv_to_rgb(h / 360.0, 0.7, 0.9)
+
+
+def _hsv_to_rgb(h: float, s: float, v: float) -> tuple[int, int, int]:
+    i = int(h * 6)
+    f = h * 6 - i
+    p = v * (1 - s)
+    q = v * (1 - f * s)
+    t = v * (1 - (1 - f) * s)
+    i = i % 6
+    if i == 0:
+        r, g, b = v, t, p
+    elif i == 1:
+        r, g, b = q, v, p
+    elif i == 2:
+        r, g, b = p, v, t
+    elif i == 3:
+        r, g, b = p, q, v
+    elif i == 4:
+        r, g, b = t, p, v
+    else:
+        r, g, b = v, p, q
+    return (int(r * 255), int(g * 255), int(b * 255))
 
 
 def _xbar_tap_positions(

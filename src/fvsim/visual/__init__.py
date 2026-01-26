@@ -10,8 +10,7 @@ from .draw import (
     draw_clbs,
     draw_connection_boxes,
     draw_io_pads,
-    draw_route_arrow,
-    draw_route_polyline,
+    _net_color,
     draw_switch_boxes,
     draw_tracks,
 )
@@ -216,11 +215,6 @@ def _draw_routes(
 ) -> None:
     if not routing.segments:
         return
-    for segment in routing.segments:
-        seg = segment_points(segment, origin_xy, cell, routing.fabric)
-        if seg:
-            draw_route_polyline(surface, list(seg), _net_color(segment.net))
-            draw_route_arrow(surface, seg[0], seg[1], segment.flow, _net_color(segment.net))
     for sw in routing.switches:
         pt = switch_point(sw.sb, origin_xy, cell)
         if pt:
@@ -229,6 +223,9 @@ def _draw_routes(
         pt = tap_point(tap, origin_xy, cell, routing.fabric)
         if pt:
             _draw_tap_marker(surface, pt, _net_color(tap.net))
+            edge = _tap_edge_point(tap, origin_xy, cell, routing.fabric)
+            if edge:
+                _draw_tap_stub(surface, edge, pt, _net_color(tap.net))
 
 
 def _draw_demo(surface, origin_xy: tuple[int, int], cell: int, grid_w: int, grid_h: int) -> None:
@@ -255,6 +252,42 @@ def _draw_tap_marker(surface, pt: tuple[int, int], color: tuple[int, int, int]) 
     pygame.draw.rect(surface, color, (pt[0] - 2, pt[1] - 2, 4, 4))
 
 
+def _tap_edge_point(tap, origin_xy: tuple[int, int], cell: int, fabric: dict) -> tuple[int, int] | None:
+    from .layout import cb_size, node_center, track_offsets
+
+    x, y = _parse_block_coord(tap.cb)
+    if x is None or y is None:
+        return None
+    row = 2 * y + 1
+    col = 2 * x + 1
+    cx, cy = node_center(origin_xy, cell, col, row)
+    cb_half = cb_size(cell) // 2
+    orientation = "h" if tap.side in ("n", "s") else "v"
+    offsets = track_offsets(
+        cell,
+        int(fabric.get("tracks", 4)),
+        fabric.get("track_dirs"),
+        orientation,
+        fabric.get("routing_dir", "bi"),
+    )
+    off = offsets[min(max(tap.track, 0), len(offsets) - 1)]
+    if tap.side == "w":
+        return (cx - cb_half, cy + off)
+    if tap.side == "e":
+        return (cx + cb_half, cy + off)
+    if tap.side == "n":
+        return (cx + off, cy - cb_half)
+    if tap.side == "s":
+        return (cx + off, cy + cb_half)
+    return None
+
+
+def _draw_tap_stub(surface, start: tuple[int, int], end: tuple[int, int], color: tuple[int, int, int]) -> None:
+    import pygame
+
+    pygame.draw.line(surface, color, start, end, 1)
+
+
 def _routing_cb_taps(routing: RoutingData):
     tap_map: dict[tuple[int, int, str], list[tuple[str, int, int]]] = {}
     for tap in routing.taps:
@@ -262,7 +295,7 @@ def _routing_cb_taps(routing: RoutingData):
         if x is None or y is None:
             continue
         key = (x, y, tap.side)
-        tap_map.setdefault(key, []).append((tap.side, tap.track, tap.pin))
+        tap_map.setdefault(key, []).append((tap.side, tap.track, tap.pin, tap.net))
 
     def taps_for(cb_col: int, cb_row: int, side: str):
         return tap_map.get((cb_col, cb_row, side), [])
@@ -280,7 +313,9 @@ def _routing_sb_connections(routing: RoutingData):
         side_out = _flow_to_side_out(sw.to_flow, sw.to_dir)
         if side_in is None or side_out is None:
             continue
-        conn_map.setdefault((x, y), []).append((side_in, sw.from_track, side_out, sw.to_track))
+        conn_map.setdefault((x, y), []).append(
+            (side_in, sw.from_track, side_out, sw.to_track, sw.net)
+        )
 
     def connections_for(col: int, row: int):
         return conn_map.get((col // 2, row // 2), [])
