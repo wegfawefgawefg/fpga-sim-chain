@@ -173,6 +173,7 @@ def draw_clbs(
     lut_tables: dict[tuple[int, int, int], list[int]] | None = None,
     rng=None,
     omux_maps: dict[tuple[int, int], list[tuple[str, int, bool]]] | None = None,
+    inputs: list[int] | None = None,
 ) -> None:
     import pygame
 
@@ -222,6 +223,7 @@ def draw_clbs(
                     lut_tables,
                     rng,
                     omux_maps,
+                    inputs,
                 )
 
 
@@ -526,6 +528,7 @@ def _draw_clb_internals(
     lut_tables: dict[tuple[int, int, int], list[int]] | None,
     rng,
     omux_maps: dict[tuple[int, int], list[tuple[str, int, bool]]] | None,
+    inputs: list[int] | None,
 ) -> None:
     import pygame
     import math
@@ -615,6 +618,12 @@ def _draw_clb_internals(
     slice_pad = max(1, int(min(slice_w, slice_h) * 0.05))
     lut_inputs = max(1, min(4, lut_k))
     rows = 2 ** lut_inputs
+    if inputs is None:
+        inputs = [0] * lut_inputs
+    input_bits = inputs[:lut_inputs]
+    active_idx = 0
+    for i, bit in enumerate(input_bits):
+        active_idx |= (bit & 1) << i
 
     if omux_maps is not None and rng is not None:
         omux_key = (clb_xy[0], clb_xy[1])
@@ -682,6 +691,15 @@ def _draw_clb_internals(
         surface.blit(ff_label, (ff_rect[0] + 2, ff_rect[1] + 2))
         surface.blit(imux_label, (imux_rect[0] + 1, imux_rect[1] + 2))
 
+        table_key = (clb_xy[0], clb_xy[1], idx)
+        if lut_tables is not None and rng is not None:
+            table = lut_tables.get(table_key)
+            if table is None:
+                table = [rng.randint(0, 1) for _ in range(rows)]
+                lut_tables[table_key] = table
+        else:
+            table = None
+
         # Slice-local wiring omitted for clarity.
         if idx < len(slice_outputs):
             side, pin_idx, use_ff = slice_outputs[idx]
@@ -693,6 +711,7 @@ def _draw_clb_internals(
                 tap = None
             if tap:
                 tx, ty = tap
+                out_val = table[active_idx] if table is not None else 0
                 if use_ff:
                     out_x = ff_rect[0] + ff_rect[2]
                     out_y = ff_rect[1] + ff_rect[3] // 2
@@ -706,17 +725,10 @@ def _draw_clb_internals(
                 else:
                     out_x = lut_rect[0] + lut_rect[2]
                     out_y = lut_rect[1] + lut_rect[3] // 2
-                pygame.draw.line(surface, (110, 110, 120), (out_x, out_y), (tx, ty), 1)
+                wire_color = (180, 220, 120) if out_val == 1 else (110, 110, 120)
+                pygame.draw.line(surface, wire_color, (out_x, out_y), (tx, ty), 1)
+                pygame.draw.circle(surface, wire_color, (tx, ty), 2)
 
-        active_idx = (tick + idx) % rows
-        table_key = (clb_xy[0], clb_xy[1], idx)
-        if lut_tables is not None and rng is not None:
-            table = lut_tables.get(table_key)
-            if table is None:
-                table = [rng.randint(0, 1) for _ in range(rows)]
-                lut_tables[table_key] = table
-        else:
-            table = None
         _draw_lut_table(surface, lut_rect, font, lut_inputs, active_idx, table)
 
     # Output pins are drawn via OMUX routing above.

@@ -113,6 +113,7 @@ def run_visual(
         cell = max(8, int(base_cell * zoom))
         origin_xy = (int(base_origin[0] + pan_x), int(base_origin[1] + pan_y))
         tick = int((time.time() - start_time) * 2)
+        inputs = [(tick >> i) & 1 for i in range(4)]
 
         surface.fill((18, 18, 20))
         _draw_grid(surface, origin_xy, cell, grid_w, grid_h)
@@ -158,6 +159,7 @@ def run_visual(
             lut_tables,
             rng,
             omux_maps,
+            inputs,
         )
 
         if runtime and (time.time() - start_time) >= runtime:
