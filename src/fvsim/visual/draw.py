@@ -160,7 +160,7 @@ def draw_connection_boxes(
                         (px, py),
                         size,
                         cell,
-                        taps_for(cb_col, cb_row, side),
+                        taps_for(x, y, side),
                         (cx, cy),
                         side,
                         pins_per_side,
@@ -188,7 +188,7 @@ def draw_clbs(
     imux_maps: dict[tuple[int, int], list[list[str]]] | None = None,
     ff_state: dict[tuple[int, int, int], dict[str, int]] | None = None,
     inputs: list[int] | None = None,
-    clb_config: dict | None = None,
+    clb_cells: dict | None = None,
 ) -> None:
     import pygame
 
@@ -241,7 +241,7 @@ def draw_clbs(
                     imux_maps,
                     ff_state,
                     inputs,
-                    clb_config,
+                    clb_cells,
                 )
 
 
@@ -684,7 +684,7 @@ def _draw_clb_internals(
     imux_maps: dict[tuple[int, int], list[list[str]]] | None,
     ff_state: dict[tuple[int, int, int], dict[str, int]] | None,
     inputs: list[int] | None,
-    clb_config: dict | None,
+    clb_cells: dict | None,
 ) -> None:
     import pygame
     import math
@@ -729,24 +729,26 @@ def _draw_clb_internals(
     for i, bit in enumerate(input_bits):
         active_idx |= (bit & 1) << i
 
-    clb_key = f"x{clb_xy[0]}y{clb_xy[1]}"
-    clb_slices = clb_config.get(clb_key, {}).get("slices") if clb_config else None
+    clb_slices = None
+    if clb_cells:
+        clb_cell = clb_cells.get((clb_xy[0], clb_xy[1]))
+        if clb_cell:
+            clb_slices = clb_cell.slices
     if clb_slices:
         slice_outputs = [None] * slice_count
         slice_inputs = [[] for _ in range(slice_count)]
         slice_tables = [None] * slice_count
         for entry in clb_slices:
-            sidx = int(entry.get("index", 0))
+            sidx = int(entry.index)
             if sidx < 0 or sidx >= slice_count:
                 continue
-            out = entry.get("output", {})
             slice_outputs[sidx] = (
-                out.get("side", "e"),
-                int(out.get("pin", 0)),
-                bool(out.get("use_ff", False)),
+                entry.output.side,
+                int(entry.output.pin),
+                bool(entry.output.use_ff),
             )
-            slice_inputs[sidx] = entry.get("inputs", [])
-            slice_tables[sidx] = entry.get("table")
+            slice_inputs[sidx] = entry.inputs
+            slice_tables[sidx] = entry.table
     elif omux_maps is not None and rng is not None:
         omux_key = (clb_xy[0], clb_xy[1])
         if omux_key not in omux_maps:

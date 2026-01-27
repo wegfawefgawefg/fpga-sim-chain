@@ -30,6 +30,11 @@ def main() -> None:
     vis_parser.add_argument("--bit", help="Input .fbit.json")
     vis_parser.add_argument("--grid", default="4x4", help="Grid size like 8x8")
     vis_parser.add_argument("--demo", action="store_true", help="Show synthetic routes")
+    vis_parser.add_argument(
+        "--cdemo",
+        action="store_true",
+        help="Show synthetic routes with random per-net colors",
+    )
     vis_parser.add_argument("--headless", action="store_true", help="Run without opening a window")
     vis_parser.add_argument(
         "--runtime",
@@ -48,13 +53,14 @@ def main() -> None:
     if args.cmd == "visual":
         from .visual import run_visual
 
-        if not args.demo and not args.bit:
-            raise SystemExit("--bit is required unless --demo is set")
+        if not args.demo and not args.cdemo and not args.bit:
+            raise SystemExit("--bit is required unless --demo or --cdemo is set")
         bit_path = Path(args.bit) if args.bit else None
         run_visual(
             bit_path,
             grid=args.grid,
             demo=args.demo,
+            cdemo=args.cdemo,
             headless=args.headless,
             runtime=args.runtime,
         )
