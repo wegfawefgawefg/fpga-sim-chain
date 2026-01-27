@@ -177,4 +177,3 @@ def _cb_box_edge_point(
     if side == "s":
         return (cb_cx + track_off, cb_cy + cell_half)
     return None
-
