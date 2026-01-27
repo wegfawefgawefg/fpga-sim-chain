@@ -310,13 +310,15 @@ def _tap_for_pin(
 ) -> dict:
     if block == "port":
         x, y, side = io_positions[pin]
+        pin_idx = 0
     else:
         x, y = placements[block]
         cell_type = cells[block]["type"]
         side = _pin_side(pin, pin_sides, cell_type, block)
+        pin_idx = _pin_index(cell_type, pin, fabric.pins_per_side)
     flow = _flow_for_side(side)
     track = _track_for_flow(net, fabric, flow)
-    return {"net": net, "cb": f"x{x}y{y}", "side": side, "track": track, "pin": 0}
+    return {"net": net, "cb": f"x{x}y{y}", "side": side, "track": track, "pin": pin_idx}
 
 
 def _is_output_pin(cell_type: str, pin: str) -> bool:
@@ -342,6 +344,18 @@ def _pin_side(pin: str, pin_sides: dict, cell_type: str, cell_name: str | None) 
     return "w"
 
 
+def _pin_index(cell_type: str, pin: str, pins_per_side: int) -> int:
+    mapping: dict[str, int] = {}
+    if cell_type in {"and2", "or2", "xor2"}:
+        mapping = {"a": 0, "b": 1, "y": 0}
+    elif cell_type == "not":
+        mapping = {"a": 0, "y": 0}
+    elif cell_type == "dff":
+        mapping = {"d": 0, "q": 0, "clk": 0, "rst": 1}
+    idx = mapping.get(pin, 0)
+    return max(0, min(pins_per_side - 1, idx))
+
+
 def build_clb_config(
     module: dict,
     placements: dict[str, tuple[int, int]],
@@ -357,8 +371,8 @@ def build_clb_config(
         entry = clb.setdefault(key, {"slices": []})
         slices = entry["slices"]
         slice_idx = len(slices)
-        inputs = _slice_inputs(cell, pin_sides)
-        output = _slice_output(cell, pin_sides)
+        inputs = _slice_inputs(cell, pin_sides, fabric.pins_per_side)
+        output = _slice_output(cell, pin_sides, fabric.pins_per_side)
         table = _lut_table(cell["type"], fabric.lut_k)
         slices.append(
             {
@@ -371,25 +385,27 @@ def build_clb_config(
     return clb
 
 
-def _slice_inputs(cell: dict, pin_sides: dict) -> list[str]:
+def _slice_inputs(cell: dict, pin_sides: dict, pins_per_side: int) -> list[str]:
     cell_type = cell["type"]
-    side_counts: dict[str, int] = {"w": 0, "e": 0, "n": 0, "s": 0}
     inputs: list[str] = []
     for pin in ("a", "b", "d"):
         if pin not in cell["pins"]:
             continue
         side = _pin_side(pin, pin_sides, cell_type, None)
-        idx = side_counts[side]
-        side_counts[side] += 1
+        idx = _pin_index(cell_type, pin, pins_per_side)
         inputs.append(f"{side.upper()}{idx}")
     return inputs
 
 
-def _slice_output(cell: dict, pin_sides: dict) -> dict:
+def _slice_output(cell: dict, pin_sides: dict, pins_per_side: int) -> dict:
     cell_type = cell["type"]
     out_pin = "q" if cell_type == "dff" else "y"
     side = _pin_side(out_pin, pin_sides, cell_type, None)
-    return {"side": side, "pin": 0, "use_ff": cell_type == "dff"}
+    return {
+        "side": side,
+        "pin": _pin_index(cell_type, out_pin, pins_per_side),
+        "use_ff": cell_type == "dff",
+    }
 
 
 def _lut_table(cell_type: str, lut_k: int) -> list[int]:
