@@ -178,6 +178,8 @@ def run_visual(
             grid_h,
             state.io,
             label_font,
+            state.fabric,
+            state.cb,
         )
         draw_clbs(
             surface,

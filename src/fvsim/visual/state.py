@@ -28,6 +28,18 @@ class SliceOutput:
 
 
 @dataclass(frozen=True)
+class IOPad:
+    name: str
+    x: int
+    y: int
+    side: str
+    kind: str
+    pin: int | None = None
+    track: int | None = None
+    net: str | None = None
+
+
+@dataclass(frozen=True)
 class Slice:
     index: int
     inputs: list[str]
@@ -63,4 +75,4 @@ class FabricState:
     sb: dict[tuple[int, int], SBCell] = field(default_factory=dict)
     cb: dict[tuple[int, int, str], CBCell] = field(default_factory=dict)
     clb: dict[tuple[int, int], CLBCell] = field(default_factory=dict)
-    io: dict = field(default_factory=dict)
+    io: list[IOPad] = field(default_factory=list)

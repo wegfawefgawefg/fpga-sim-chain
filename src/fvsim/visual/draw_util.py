@@ -112,9 +112,8 @@ def _pin_offsets_for_side(size: int, pins_per_side: int, side: str) -> list[int]
         return [0]
     start = -span // 2
     step = span / (count - 1)
-    shift = step / 2 if side in ("e", "s") else 0.0
     limit = span // 2
-    offsets = [int(start + i * step + shift) for i in range(count)]
+    offsets = [int(start + i * step) for i in range(count)]
     return [max(-limit, min(limit, off)) for off in offsets]
 
 
