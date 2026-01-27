@@ -61,18 +61,21 @@ def draw_io_pads(
         row = 2 * y + 1
         cx, cy = node_center(origin, cell, col, row)
         offset = cell // 2 + 8
+        edge_pt = None
         if side in ("w", "e"):
             pin_offs = _pin_offsets_for_side(clb_size(cell), pins_per_side, side)
             pin_off = pin_offs[_clamp_idx(pin, pin_offs)]
             edge_x = x0 if side == "w" else x0 + fabric_w
             edge_pt = (edge_x, cy + pin_off)
-            px = edge_pt[0] + (-offset if side == "w" else offset)
-            py = edge_pt[1]
         else:
             pin_offs = _pin_offsets_for_side(clb_size(cell), pins_per_side, side)
             pin_off = pin_offs[_clamp_idx(pin, pin_offs)]
             edge_y = y0 if side == "n" else y0 + fabric_h
             edge_pt = (cx + pin_off, edge_y)
+        if side in ("w", "e"):
+            px = edge_pt[0] + (-offset if side == "w" else offset)
+            py = edge_pt[1]
+        else:
             px = edge_pt[0]
             py = edge_pt[1] + (-offset if side == "n" else offset)
         line_color = _net_color(net) if net else edge_color
@@ -174,3 +177,4 @@ def _cb_box_edge_point(
     if side == "s":
         return (cb_cx + track_off, cb_cy + cell_half)
     return None
+

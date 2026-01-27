@@ -59,6 +59,12 @@ def draw_connection_boxes(
                     surface.blit(label, (lx, ly))
                 _draw_cb_tracks(surface, (px, py), size, cell, side, offsets_h, offsets_v, (72, 78, 86))
                 if taps_for:
+                    is_outer = (
+                        (side == "w" and x == 0)
+                        or (side == "e" and x == grid_w - 1)
+                        or (side == "n" and y == 0)
+                        or (side == "s" and y == grid_h - 1)
+                    )
                     _draw_cb_taps(
                         surface,
                         (px, py),
@@ -70,6 +76,7 @@ def draw_connection_boxes(
                         pins_per_side,
                         offsets_h,
                         offsets_v,
+                        is_outer,
                     )
 
 
@@ -84,6 +91,7 @@ def _draw_cb_taps(
     pins_per_side: int,
     offsets_h: list[int],
     offsets_v: list[int],
+    is_outer: bool,
 ) -> None:
     import pygame
 
@@ -119,6 +127,10 @@ def _draw_cb_taps(
             pygame.draw.line(surface, color, cb_edge, (ix, iy), 1)
             pygame.draw.line(surface, color, (ix, cy - cb_half), (ix, cy + cb_half), 1)
             _draw_cb_lane_extensions(surface, cx, cy, cb_half, cell // 2, "v", track_off, color)
+            if is_outer:
+                pygame.draw.line(
+                    surface, color, (cx - cb_half, cy + pin_off), (cx - cell // 2, cy + pin_off), 1
+                )
         elif side == "e":
             ix = cx + track_off
             iy = cy + pin_off
@@ -128,6 +140,10 @@ def _draw_cb_taps(
             pygame.draw.line(surface, color, cb_edge, (ix, iy), 1)
             pygame.draw.line(surface, color, (ix, cy - cb_half), (ix, cy + cb_half), 1)
             _draw_cb_lane_extensions(surface, cx, cy, cb_half, cell // 2, "v", track_off, color)
+            if is_outer:
+                pygame.draw.line(
+                    surface, color, (cx + cb_half, cy + pin_off), (cx + cell // 2, cy + pin_off), 1
+                )
         elif side == "n":
             ix = cx + pin_off
             iy = cy + track_off
@@ -137,6 +153,10 @@ def _draw_cb_taps(
             pygame.draw.line(surface, color, cb_edge, (ix, iy), 1)
             pygame.draw.line(surface, color, (cx - cb_half, iy), (cx + cb_half, iy), 1)
             _draw_cb_lane_extensions(surface, cx, cy, cb_half, cell // 2, "h", track_off, color)
+            if is_outer:
+                pygame.draw.line(
+                    surface, color, (cx + pin_off, cy - cb_half), (cx + pin_off, cy - cell // 2), 1
+                )
         else:
             ix = cx + pin_off
             iy = cy + track_off
@@ -146,6 +166,10 @@ def _draw_cb_taps(
             pygame.draw.line(surface, color, cb_edge, (ix, iy), 1)
             pygame.draw.line(surface, color, (cx - cb_half, iy), (cx + cb_half, iy), 1)
             _draw_cb_lane_extensions(surface, cx, cy, cb_half, cell // 2, "h", track_off, color)
+            if is_outer:
+                pygame.draw.line(
+                    surface, color, (cx + pin_off, cy + cb_half), (cx + pin_off, cy + cell // 2), 1
+                )
         _draw_x(surface, (ix, iy), color)
 
 
