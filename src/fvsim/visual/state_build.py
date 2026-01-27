@@ -71,7 +71,7 @@ def build_demo_state(
                 taps: list[CBTap] = []
                 for idx, (s, t, p) in enumerate(_demo_cb_taps(x, y, side)):
                     net = f"cb{x}_{y}_{side}_{idx}_{rng.randint(0, 9999)}" if colored else None
-                    taps.append(CBTap(s, t, p, net))
+                    taps.append(CBTap(s, t, p, net, "clb"))
                 cb[(x, y, side)] = CBCell(x=x, y=y, side=side, taps=taps)
 
     clb = _demo_clb_state(fabric, rng)
@@ -107,7 +107,7 @@ def _cb_from_routing(routing: RoutingData) -> dict[tuple[int, int, str], CBCell]
             continue
         key = (x, y, tap.side)
         entry = cb.get(key)
-        tap_entry = CBTap(tap.side, tap.track, tap.pin, tap.net)
+        tap_entry = CBTap(tap.side, tap.track, tap.pin, tap.net, "clb")
         if entry is None:
             cb[key] = CBCell(x=x, y=y, side=tap.side, taps=[tap_entry])
         else:
@@ -254,7 +254,7 @@ def _demo_io_state(
             cb_key = _cb_key_for_pad(pad)
             if cb_key:
                 cb_x, cb_y, cb_side = cb_key
-                tap = CBTap(cb_side, track, pin, net)
+                tap = CBTap(cb_side, track, pin, net, "io")
                 key = (cb_x, cb_y, cb_side)
                 cell = cb.setdefault(key, CBCell(cb_x, cb_y, cb_side, []))
                 cell.taps.append(tap)

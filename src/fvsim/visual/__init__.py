@@ -231,12 +231,13 @@ def _state_cb_taps(state):
         cell = state.cb.get((clb_x, clb_y, side))
         if not cell:
             return []
-        return [
-            (tap.side, tap.track, tap.pin, tap.net or "")
-            if tap.net
-            else (tap.side, tap.track, tap.pin)
-            for tap in cell.taps
-        ]
+        taps = []
+        for tap in cell.taps:
+            if tap.net:
+                taps.append((tap.side, tap.track, tap.pin, tap.net, tap.source))
+            else:
+                taps.append((tap.side, tap.track, tap.pin, tap.source))
+        return taps
 
     return taps_for
 

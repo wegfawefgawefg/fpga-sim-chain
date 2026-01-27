@@ -6,7 +6,7 @@ from .layout import cb_size, clb_size, node_center, track_offsets
 from .draw_util import _draw_x, _net_color, _offsets_for_side, _pin_offsets_for_side
 
 Side = str
-Tap = tuple[Side, int, int] | tuple[Side, int, int, str]
+Tap = tuple[Side, int, int] | tuple[Side, int, int, str] | tuple[Side, int, int, str, str]
 
 
 def draw_connection_boxes(
@@ -106,11 +106,17 @@ def _draw_cb_taps(
     clb_x, clb_y = clb_center
 
     for tap in taps:
-        if len(tap) == 4:
-            tap_side, track, pin, net = tap
-            color = _net_color(net)
+        tap_side = tap[0]
+        track = tap[1]
+        pin = tap[2]
+        net = None
+        source = "clb"
+        if len(tap) >= 4:
+            net = tap[3]
+            if len(tap) >= 5:
+                source = tap[4]
+            color = _net_color(net) if net else white
         else:
-            tap_side, track, pin = tap
             color = white
         if tap_side != side:
             continue
@@ -118,6 +124,8 @@ def _draw_cb_taps(
         pidx = min(max(pin, 0), len(pin_offs) - 1)
         track_off = track_offs[tidx]
         pin_off = pin_offs[pidx]
+        if source == "io":
+            pin_off = track_off
         if side == "w":
             ix = cx + track_off
             iy = cy + pin_off

@@ -18,6 +18,7 @@ class CBTap:
     track: int
     pin: int
     net: str | None = None
+    source: str = "clb"
 
 
 @dataclass(frozen=True)
